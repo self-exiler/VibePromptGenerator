@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vibe Prompt Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .tab-active { color: #2563EB; border-bottom-color: #2563EB; }
+        .tab-inactive { color: #6B7280; border-bottom-color: transparent; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <header class="mb-8 flex justify-between items-center">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900">Vibe Prompt Generator</h1>
+                <p class="mt-2 text-gray-600">高效生成标准化的软件需求Prompt</p>
+            </div>
+            <button onclick="generateMarkdown()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded shadow flex items-center">
+                <i class="fas fa-download mr-2"></i> 生成并下载 Prompt.md
+            </button>
+        </header>
+
+        <!-- Navigation Tabs -->
+        <div class="border-b border-gray-200 mb-6">
+            <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+                <button id="tab-btn-generator" onclick="switchMainTab('generator')" class="tab-active border-b-2 py-4 px-1 font-medium text-sm flex items-center">
+                    <i class="fas fa-magic mr-2"></i> 生成器
+                </button>
+                <button id="tab-btn-langs" onclick="switchMainTab('langs')" class="tab-inactive border-b-2 py-4 px-1 font-medium text-sm flex items-center">
+                    <i class="fas fa-code mr-2"></i> 语言配置
+                </button>
+                <button id="tab-btn-phrases" onclick="switchMainTab('phrases')" class="tab-inactive border-b-2 py-4 px-1 font-medium text-sm flex items-center">
+                    <i class="fas fa-list-alt mr-2"></i> 常用语库
+                </button>
+                <button id="tab-btn-data" onclick="switchMainTab('data')" class="tab-inactive border-b-2 py-4 px-1 font-medium text-sm flex items-center">
+                    <i class="fas fa-database mr-2"></i> 数据管理
+                </button>
+            </nav>
+        </div>
+
+        <!-- Content Area -->
+        <main class="bg-white rounded-lg shadow p-6 min-h-[600px]">
+            
+            <!-- Tab 1: Generator -->
+            <div id="tab-content-generator">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <!-- Left: Configuration -->
+                    <div class="space-y-6">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">开发语言</label>
+                            <select id="select-lang" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border">
+                                <option value="">加载中...</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">关键库/轮子 (多选)</label>
+                            <div id="wheels-container" class="grid grid-cols-2 gap-2 bg-gray-50 p-4 rounded-md border border-gray-200 max-h-48 overflow-y-auto">
+                                <span class="text-gray-400 text-sm col-span-full">请先选择开发语言</span>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">软件架构</label>
+                                <select id="select-arch" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border"></select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">运行环境</label>
+                                <select id="select-env" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border"></select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">总体描述</label>
+                            <textarea id="general-desc" rows="4" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border" placeholder="简要描述项目背景、目标和核心功能..."></textarea>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">其他注意事项</label>
+                            <textarea id="notes" rows="3" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border" placeholder="性能要求、安全规范等..."></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Right: Modules -->
+                    <div class="flex flex-col h-full">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-medium text-gray-900">模块详细需求</h3>
+                            <div class="space-x-2">
+                                <button onclick="addModule()" class="text-blue-600 hover:text-blue-800 text-sm font-medium"><i class="fas fa-plus"></i> 新增模块</button>
+                                <button onclick="removeCurrentModule()" class="text-red-600 hover:text-red-800 text-sm font-medium"><i class="fas fa-trash"></i> 删除当前</button>
+                            </div>
+                        </div>
+
+                        <div class="border-b border-gray-200" id="module-tabs-header">
+                            <!-- JS will populate tabs here -->
+                        </div>
+
+                        <div class="flex-1 bg-gray-50 border border-t-0 border-gray-200 rounded-b-md p-4 space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">模块名称</label>
+                                <input type="text" id="module-name" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border">
+                            </div>
+
+                            <div class="flex-1">
+                                <div class="flex justify-between items-center mb-1">
+                                    <label class="block text-sm font-medium text-gray-700">前端/上层逻辑</label>
+                                    <button onclick="openPhraseModal('frontend')" class="text-xs text-blue-600 hover:underline">插入常用语</button>
+                                </div>
+                                <textarea id="module-front" rows="6" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border"></textarea>
+                            </div>
+
+                            <div class="flex-1">
+                                <div class="flex justify-between items-center mb-1">
+                                    <label class="block text-sm font-medium text-gray-700">后端/底层逻辑</label>
+                                    <button onclick="openPhraseModal('backend')" class="text-xs text-blue-600 hover:underline">插入常用语</button>
+                                </div>
+                                <textarea id="module-back" rows="6" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-8 pt-4 border-t border-gray-200 flex justify-end">
+                    <button onclick="resetAll()" class="text-gray-500 hover:text-gray-700 text-sm"><i class="fas fa-undo"></i> 重置草稿</button>
+                </div>
+            </div>
+
+            <!-- Tab 2: Languages -->
+            <div id="tab-content-langs" class="hidden">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-lg font-medium text-gray-900">语言配置管理</h3>
+                    <button onclick="openLangModal()" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700"><i class="fas fa-plus"></i> 添加语言</button>
+                </div>
+                <div id="lang-list-container" class="space-y-4">
+                    <!-- JS populated -->
+                </div>
+            </div>
+
+            <!-- Tab 3: Phrases -->
+            <div id="tab-content-phrases" class="hidden">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div>
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="font-medium text-gray-900">前端/上层常用语</h3>
+                            <button onclick="addPhrase('frontend')" class="text-blue-600 text-sm hover:underline"><i class="fas fa-plus"></i> 添加</button>
+                        </div>
+                        <ul id="phrases-list-frontend" class="divide-y divide-gray-200 bg-gray-50 rounded border border-gray-200 p-4 max-h-[600px] overflow-y-auto"></ul>
+                    </div>
+                    <div>
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="font-medium text-gray-900">后端/底层常用语</h3>
+                            <button onclick="addPhrase('backend')" class="text-blue-600 text-sm hover:underline"><i class="fas fa-plus"></i> 添加</button>
+                        </div>
+                        <ul id="phrases-list-backend" class="divide-y divide-gray-200 bg-gray-50 rounded border border-gray-200 p-4 max-h-[600px] overflow-y-auto"></ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab 4: Data Management (New) -->
+            <div id="tab-content-data" class="hidden">
+                <div class="max-w-4xl mx-auto space-y-8">
+                    
+                    <!-- Network Configuration (New) -->
+                    <div class="bg-white border border-gray-200 rounded-lg p-6">
+                        <div class="flex items-center mb-4">
+                            <div class="bg-purple-100 p-2 rounded-full mr-3">
+                                <i class="fas fa-cloud-download-alt text-purple-600 text-xl"></i>
+                            </div>
+                            <h3 class="text-lg font-bold text-gray-900">网络配置导入</h3>
+                        </div>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">配置 URL</label>
+                                <div class="flex space-x-2">
+                                    <input type="text" id="network-config-url" placeholder="https://example.com/config.json" class="flex-1 border-gray-300 rounded-md shadow-sm focus:ring-purple-500 focus:border-purple-500 p-2 border">
+                                    <button onclick="fetchNetworkPreview()" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded shadow-sm whitespace-nowrap">
+                                        <i class="fas fa-globe mr-1"></i> 预览 & 导入
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">启动策略</label>
+                                    <select id="network-startup-strategy" onchange="saveNetworkSettings()" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-purple-500 focus:border-purple-500 p-2 border">
+                                        <option value="manual">仅手动 (默认)</option>
+                                        <option value="network-first">网络优先 (自动覆盖)</option>
+                                        <option value="local-first">本地优先 (失败时尝试网络)</option>
+                                    </select>
+                                    <p class="text-xs text-gray-500 mt-1">控制每次打开应用时是否自动更新配置</p>
+                                </div>
+                                <div class="flex items-end">
+                                     <div id="network-status" class="text-sm text-gray-500 w-full text-right pb-2">
+                                        <span class="inline-block w-2 h-2 rounded-full bg-gray-300 mr-1"></span> 未配置
+                                     </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Backup & Restore -->
+                    <div class="bg-white border border-gray-200 rounded-lg p-6">
+                        <div class="flex items-center mb-4">
+                            <div class="bg-blue-100 p-2 rounded-full mr-3">
+                                <i class="fas fa-sync text-blue-600 text-xl"></i>
+                            </div>
+                            <h3 class="text-lg font-bold text-gray-900">数据备份与恢复</h3>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="bg-gray-50 p-4 rounded-lg">
+                                <h4 class="font-medium text-gray-800 mb-2">导出数据</h4>
+                                <p class="text-sm text-gray-500 mb-4">将当前配置或默认模版导出为JSON文件。</p>
+                                <div class="flex flex-col space-y-2">
+                                    <button onclick="exportData()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded flex justify-center items-center text-sm">
+                                        <i class="fas fa-file-export mr-2"></i> 一键导出备份
+                                    </button>
+                                    <button onclick="exportDefaults()" class="w-full bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-2 px-4 rounded flex justify-center items-center text-sm">
+                                        <i class="fas fa-code mr-2"></i> 导出默认模版
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="bg-gray-50 p-4 rounded-lg">
+                                <h4 class="font-medium text-gray-800 mb-2">导入数据</h4>
+                                <p class="text-sm text-gray-500 mb-4">从备份文件恢复数据 (支持覆盖或合并)。</p>
+                                <input type="file" id="import-file" accept=".json" class="hidden" onchange="handleFileSelect(this)">
+                                <button onclick="document.getElementById('import-file').click()" class="w-full bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-2 px-4 rounded flex justify-center items-center">
+                                    <i class="fas fa-file-import mr-2"></i> 选择备份文件...
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Import Preview Area (Hidden by default) -->
+                        <div id="import-preview-area" class="mt-4 border-t border-gray-200 pt-4 hidden">
+                            <div class="bg-blue-50 border border-blue-100 rounded p-4 mb-4">
+                                <h5 class="font-bold text-blue-800 mb-2">📦 备份文件内容预览</h5>
+                                <pre id="import-preview-text" class="text-xs text-gray-600 overflow-auto max-h-32 mb-4 bg-white p-2 rounded border border-blue-100"></pre>
+                                <div class="flex space-x-4">
+                                    <button onclick="confirmImport('overwrite')" class="bg-red-600 hover:bg-red-700 text-white text-sm py-2 px-4 rounded">
+                                        ⚠️ 覆盖现有数据
+                                    </button>
+                                    <button onclick="confirmImport('merge')" class="bg-blue-600 hover:bg-blue-700 text-white text-sm py-2 px-4 rounded">
+                                        ⬇️ 合并数据 (保留现有)
+                                    </button>
+                                    <button onclick="cancelImport()" class="text-gray-500 hover:text-gray-700 text-sm py-2 px-4">取消</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Statistics -->
+                    <div class="bg-white border border-gray-200 rounded-lg p-6">
+                         <div class="flex items-center mb-4">
+                            <div class="bg-green-100 p-2 rounded-full mr-3">
+                                <i class="fas fa-chart-pie text-green-600 text-xl"></i>
+                            </div>
+                            <h3 class="text-lg font-bold text-gray-900">数据统计</h3>
+                        </div>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="stats-container">
+                            <!-- JS populated -->
+                        </div>
+                    </div>
+
+                    <!-- Maintenance -->
+                    <div class="bg-white border border-red-200 rounded-lg p-6">
+                        <div class="flex items-center mb-4">
+                            <div class="bg-red-100 p-2 rounded-full mr-3">
+                                <i class="fas fa-exclamation-triangle text-red-600 text-xl"></i>
+                            </div>
+                            <h3 class="text-lg font-bold text-gray-900">危险操作</h3>
+                        </div>
+                        <div class="flex space-x-4">
+                            <button onclick="resetToDefaults()" class="bg-yellow-500 hover:bg-yellow-600 text-white font-medium py-2 px-4 rounded flex items-center">
+                                <i class="fas fa-history mr-2"></i> 恢复默认配置
+                            </button>
+                            <button onclick="clearAllData()" class="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded flex items-center">
+                                <i class="fas fa-trash-alt mr-2"></i> 清空所有数据
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <!-- Phrase Selection Modal -->
+    <div id="modal-phrases" class="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center hidden z-50">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
+            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                <h3 class="text-lg font-medium text-gray-900" id="modal-phrases-title">选择常用语</h3>
+                <button onclick="closeModal('modal-phrases')" class="text-gray-400 hover:text-gray-500"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-6 max-h-[400px] overflow-y-auto" id="modal-phrases-list">
+                <!-- JS populated -->
+            </div>
+            <div class="px-6 py-4 bg-gray-50 rounded-b-lg flex justify-end space-x-2">
+                <button onclick="closeModal('modal-phrases')" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">取消</button>
+                <button onclick="insertSelectedPhrases()" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">插入选中</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Language Edit Modal -->
+    <div id="modal-lang" class="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center hidden z-50">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-lg font-medium text-gray-900">编辑语言配置</h3>
+            </div>
+            <div class="p-6 space-y-4">
+                <input type="hidden" id="lang-edit-id">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">语言名称</label>
+                    <input type="text" id="lang-edit-name" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">常用库/轮子 (用逗号分隔)</label>
+                    <textarea id="lang-edit-wheels" rows="4" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border"></textarea>
+                    <p class="text-xs text-gray-500 mt-1">例如: React, Vue, Express</p>
+                </div>
+            </div>
+            <div class="px-6 py-4 bg-gray-50 rounded-b-lg flex justify-end space-x-2">
+                <button onclick="closeModal('modal-lang')" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">取消</button>
+                <button onclick="saveLanguage()" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/data.js"></script>
+    <script src="js/main.js"></script>
+
+<style>
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+.inland-security-footer {
+  position: fixed;
+  z-index: 10;
+  bottom: 0;
+  right: 0;
+  width: fit-content;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.tooltip-container {
+  position: relative;
+}
+
+.trigger-content {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  background-color: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.minimax-link {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 300;
+  color: #adadad;
+  text-decoration: none;
+}
+
+.minimax-link:visited {
+  color: #adadad;
+}
+
+.minimax-link:hover {
+  color: #666666;
+}
+
+.tooltip-content {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  padding-bottom: 16px; /* 8px 内容间距 + 8px 用于鼠标移动的透明区域 */
+  font-size: 12px;
+  line-height: 17px;
+  background-color: #fafafa;
+  border-radius: 12px;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  color: #171717;
+}
+
+/* 创建透明的连接区域，让鼠标可以平滑移动到 tooltip */
+.tooltip-content::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 0;
+  right: 0;
+  height: 16px;
+}
+
+.tooltip-container:hover .tooltip-content {
+  display: flex;
+}
+
+.info-section {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
+
+.beian-link {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+  color: #171717;
+}
+
+.beian-icon {
+  width: 14px;
+  height: 14px;
+  margin-right: 2px;
+}
+
+.underline-text {
+  color: #171717;
+  text-decoration: underline;
+}
+
+.underline-text:hover {
+  color: #000000;
+}
+
+/* 深色模式支持 */
+@media (prefers-color-scheme: dark) {
+  .trigger-content {
+    background-color: transparent;
+  }
+
+  .minimax-link,
+  .minimax-link:visited {
+    color: #666666;
+  }
+
+  .minimax-link:hover {
+    color: #adadad;
+  }
+
+  .tooltip-content {
+    background-color: #262626;
+    color: #ededed;
+  }
+
+  .beian-link,
+  .underline-text {
+    color: #ededed;
+  }
+
+  .underline-text:hover {
+    color: #ffffff;
+  }
+}
+
+</style>
+<div class="inland-security-footer">
+  <div class="tooltip-container">
+    <div class="trigger-content">
+      <a href="https://www.minimaxi.com/" target="_blank" rel="noreferrer" class="minimax-link">
+        <span>© 2026 MiniMax</span>
+      </a>
+    </div>
+    <div class="tooltip-content">
+      <section class="info-section">
+        <span>上海稀宇科技有限公司</span>
+      </section>
+
+      <section class="info-section">
+        <a class="beian-link" href="https://www.beian.gov.cn/portal/registerSystemInfo?recordcode=31010402010179" target="_blank" rel="noreferrer">
+          <img alt="hailuo-beian-icon" src="https://cdn.hailuoai.com/hailuo-video-web/public_assets/223037d3-79fd-4db0-a456-749f38a6a14b.png" class="beian-icon">
+          <span class="underline-text">沪公网安备31010402010179号</span>
+        </a>
+        <a href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer" class="underline-text">
+          沪ICP备2023003282号-38
+        </a>
+      </section>
+
+      <section class="info-section">
+        <span>模型名称：MiniMax</span>
+        <span>备案号：Shanghai-MiniMax-202505230046</span>
+      </section>
+
+      <section class="info-section">
+        <a href="https://agent.minimaxi.com/doc/zh/terms-of-service.html" target="_blank" rel="noreferrer" class="underline-text">
+          用户协议
+        </a>
+        <a href="https://agent.minimaxi.com/doc/zh/privacy-policy.html" target="_blank" rel="noreferrer" class="underline-text">
+          隐私政策
+        </a>
+      </section>
+    </div>
+  </div>
+</div>
+
+
+<script>
+/**
+ * Iframe 元素高亮注入脚本
+ * 需要在目标网站中引入此脚本来支持跨域 iframe 高亮功能
+ *
+ * 使用方法：
+ * 1. 将此脚本添加到目标网站的 HTML 中
+ * 2. 或通过浏览器扩展、用户脚本等方式注入
+ */
+
+(function () {
+  "use strict";
+
+  // 检查是否在 iframe 中
+  if (window.self === window.top) {
+    return; // 不在 iframe 中，不执行
+  }
+
+  // 检查是否已经初始化过
+  if (window.__iframeHighlightInitialized) {
+    return;
+  }
+  window.__iframeHighlightInitialized = true;
+  console.log("Iframe 高亮脚本已加载");
+
+  // 创建高亮覆盖层
+  var overlay = document.createElement("div");
+  overlay.id = "iframe-highlight-overlay";
+  overlay.style.cssText = "\n    position: fixed;\n    top: 0;\n    left: 0;\n    width: 100vw;\n    height: 100vh;\n    pointer-events: none;\n    z-index: 999999;\n    overflow: hidden;\n  ";
+
+  // 创建悬停高亮框（虚线边框）
+  var highlightBox = document.createElement("div");
+  highlightBox.id = "iframe-highlight-box";
+  highlightBox.style.cssText = "\n    position: absolute;\n    border: 2px dashed #007AFF;\n    background: rgba(0, 122, 255, 0.08);\n    pointer-events: none;\n    display: none;\n    transition: all 0.1s ease;\n    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.8);\n    border-radius: 2px;\n  ";
+
+  // 创建选中节点的常驻高亮框（实线边框）
+  var selectedBox = document.createElement("div");
+  selectedBox.id = "iframe-selected-box";
+  selectedBox.style.cssText = "\n    position: absolute;\n    border: 2px solid #007AFF;\n    pointer-events: none;\n    display: none;\n    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.9), 0 0 8px rgba(255, 107, 53, 0.4);\n    border-radius: 2px;\n    z-index: 1000000;\n  ";
+
+  // 创建悬停标签显示
+  var tagLabel = document.createElement("div");
+  tagLabel.id = "iframe-tag-label";
+  tagLabel.style.cssText = "\n    position: absolute;\n    background: #007AFF;\n    color: white;\n    padding: 2px 6px;\n    font-size: 11px;\n    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;\n    border-radius: 2px;\n    pointer-events: none;\n    display: none;\n    white-space: nowrap;\n    z-index: 1000001;\n    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);\n    font-weight: 500;\n  ";
+
+  // 创建选中节点标签
+  var selectedLabel = document.createElement("div");
+  selectedLabel.id = "iframe-selected-label";
+  selectedLabel.style.cssText = "\n    position: absolute;\n    background: #007AFF;\n    color: white;\n    padding: 3px 8px;\n    font-size: 11px;\n    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;\n    border-radius: 3px;\n    pointer-events: none;\n    display: none;\n    white-space: nowrap;\n    z-index: 1000002;\n    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);\n    font-weight: 600;\n  ";
+  overlay.appendChild(highlightBox);
+  overlay.appendChild(selectedBox);
+  overlay.appendChild(tagLabel);
+  overlay.appendChild(selectedLabel);
+  document.body.appendChild(overlay);
+
+  // 存储当前选中的元素
+  var selectedElement = null;
+  var highlightEnabled = false;
+
+  // 更新选中元素的高亮显示
+  function updateSelectedHighlight(element) {
+    console.log("updateSelectedHighlight called with:", element);
+    if (!element) {
+      selectedBox.style.display = "none";
+      selectedLabel.style.display = "none";
+      selectedElement = null;
+      console.log("Cleared selected highlight");
+      return;
+    }
+    selectedElement = element;
+    var rect = element.getBoundingClientRect();
+    console.log("Selected element rect:", rect);
+
+    // 更新选中高亮框位置
+    selectedBox.style.display = "block";
+    selectedBox.style.left = "".concat(rect.left - 2, "px");
+    selectedBox.style.top = "".concat(rect.top - 2, "px");
+    selectedBox.style.width = "".concat(rect.width + 4, "px");
+    selectedBox.style.height = "".concat(rect.height + 4, "px");
+
+    // 更新选中标签位置和内容
+    selectedLabel.style.display = "block";
+    selectedLabel.textContent = "\u2713 <".concat(element.tagName.toLowerCase(), ">");
+
+    // 计算标签位置，确保不超出视窗
+    var labelTop = rect.top - 28;
+    var labelLeft = rect.left;
+
+    // 如果标签会超出顶部，显示在元素下方
+    if (labelTop < 5) {
+      labelTop = rect.bottom + 5;
+    }
+
+    // 如果标签会超出右侧，向左调整
+    var labelWidth = selectedLabel.offsetWidth || 100; // 预估宽度
+    if (labelLeft + labelWidth > window.innerWidth - 10) {
+      labelLeft = window.innerWidth - labelWidth - 10;
+    }
+    selectedLabel.style.left = "".concat(Math.max(5, labelLeft), "px");
+    selectedLabel.style.top = "".concat(labelTop, "px");
+    console.log("Selected highlight positioned at:", {
+      left: selectedBox.style.left,
+      top: selectedBox.style.top,
+      width: selectedBox.style.width,
+      height: selectedBox.style.height
+    });
+  }
+  function getElementSelector(element) {
+    if (!(element instanceof Element)) throw new Error('Argument must be a DOM element');
+    var segments = [];
+    var current = element;
+    while (current !== document.documentElement) {
+      var selector = '';
+      // 优先检查唯一ID
+      if (current.id && document.querySelectorAll("#".concat(current.id)).length === 1) {
+        segments.unshift("#".concat(current.id));
+        break; // ID唯一，无需继续向上
+      }
+
+      // 生成类名选择器（取第一个有效类名）
+      var classes = Array.from(current.classList).filter(function (c) {
+        return !c.startsWith('js-');
+      });
+      var className = classes.length > 0 ? ".".concat(classes[0]) : '';
+
+      // 生成位置索引（nth-child）
+      var tag = current.tagName.toLowerCase();
+      if (!className) {
+        var siblings = Array.from(current.parentNode.children);
+        var index = siblings.findIndex(function (el) {
+          return el === current;
+        }) + 1;
+        selector = "".concat(tag, ":nth-child(").concat(index, ")");
+      } else {
+        selector = className;
+      }
+      segments.unshift(selector);
+      current = current.parentElement;
+    }
+
+    // 处理根元素
+    if (current === document.documentElement) {
+      segments.unshift('html');
+    }
+    return segments.join(' > ');
+  }
+
+  // 获取元素文本内容
+  function getElementText(element) {
+    var _element$textContent;
+    if (element.tagName === "INPUT") {
+      return element.value || element.placeholder || "";
+    }
+    if (element.tagName === "TEXTAREA") {
+      return element.value || element.placeholder || "";
+    }
+    var text = ((_element$textContent = element.textContent) === null || _element$textContent === void 0 ? void 0 : _element$textContent.trim()) || "";
+    return text.length > 50 ? text.substring(0, 50) + "..." : text;
+  }
+
+  // 获取元素属性信息
+  function getElementAttributes(element) {
+    var attrs = {};
+    for (var i = 0; i < element.attributes.length; i++) {
+      var attr = element.attributes[i];
+      attrs[attr.name] = attr.value;
+    }
+    return attrs;
+  }
+
+  // 鼠标悬停事件处理
+  function handleMouseOver(e) {
+    if (!highlightEnabled) return;
+    var target = e.target;
+    if (!target || target === overlay || target === highlightBox || target === tagLabel || target === selectedBox || target === selectedLabel) {
+      return;
+    }
+
+    // 避免高亮 html 和 body 元素
+    if (target === document.documentElement || target === document.body) {
+      return;
+    }
+
+    // 如果是已选中的元素，不显示悬停高亮
+    if (target === selectedElement) {
+      highlightBox.style.display = "none";
+      tagLabel.style.display = "none";
+      return;
+    }
+    var rect = target.getBoundingClientRect();
+    var selector = getElementSelector(target);
+    var text = getElementText(target);
+    var attributes = getElementAttributes(target);
+
+    // 更新悬停高亮框位置
+    highlightBox.style.display = "block";
+    highlightBox.style.left = "".concat(rect.left - 2, "px");
+    highlightBox.style.top = "".concat(rect.top - 2, "px");
+    highlightBox.style.width = "".concat(rect.width + 4, "px");
+    highlightBox.style.height = "".concat(rect.height + 4, "px");
+
+    // 更新标签位置和内容
+    tagLabel.style.display = "block";
+    tagLabel.textContent = "<".concat(target.tagName.toLowerCase(), ">");
+
+    // 计算标签位置，确保不超出视窗
+    var labelTop = rect.top - 22;
+    var labelLeft = rect.left;
+
+    // 如果标签会超出顶部，显示在元素下方
+    if (labelTop < 0) {
+      labelTop = rect.bottom + 5;
+    }
+
+    // 如果标签会超出右侧，向左调整
+    if (labelLeft + tagLabel.offsetWidth > window.innerWidth) {
+      labelLeft = window.innerWidth - tagLabel.offsetWidth - 5;
+    }
+    tagLabel.style.left = "".concat(Math.max(0, labelLeft), "px");
+    tagLabel.style.top = "".concat(labelTop, "px");
+
+    // 发送消息到父窗口
+    var elementInfo = {
+      tagName: target.tagName.toLowerCase(),
+      rect: {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        width: rect.width,
+        height: rect.height,
+        x: rect.x,
+        y: rect.y
+      },
+      selector: selector,
+      text: text,
+      attributes: attributes,
+      url: window.location.href,
+      path: window.location.pathname,
+      timestamp: Date.now()
+    };
+    try {
+      window.parent.postMessage({
+        type: "iframe-element-hover",
+        data: elementInfo,
+        source: "iframe-highlight-injector"
+      }, "*");
+    } catch (error) {
+      console.warn("无法发送消息到父窗口:", error);
+    }
+  }
+
+  // 鼠标离开事件处理
+  function handleMouseOut(e) {
+    if (!highlightEnabled) return;
+    var relatedTarget = e.relatedTarget;
+
+    // 如果鼠标移动到高亮相关元素上，不隐藏高亮
+    if (relatedTarget && (relatedTarget === highlightBox || relatedTarget === tagLabel || relatedTarget === overlay || relatedTarget === selectedBox || relatedTarget === selectedLabel)) {
+      return;
+    }
+    highlightBox.style.display = "none";
+    tagLabel.style.display = "none";
+    try {
+      window.parent.postMessage({
+        type: "iframe-element-hover",
+        data: null,
+        source: "iframe-highlight-injector"
+      }, "*");
+    } catch (error) {
+      console.warn("无法发送消息到父窗口:", error);
+    }
+  }
+
+  // 点击事件处理
+  function handleClick(e) {
+    var target = e.target;
+    if (!target || target === overlay || target === highlightBox || target === tagLabel || target === selectedBox || target === selectedLabel) {
+      return;
+    }
+
+    // 避免处理 html 和 body 元素
+    if (target === document.documentElement || target === document.body) {
+      return;
+    }
+
+    // 检查是否是交互元素，这些元素需要保留默认行为
+    var isInteractiveElement = ['input', 'textarea', 'select', 'button', 'a'].includes(target.tagName.toLowerCase());
+
+    // 如果高亮功能启用，对于非交互元素阻止默认行为和事件传播
+    if (highlightEnabled) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    var rect = target.getBoundingClientRect();
+    var selector = getElementSelector(target);
+    var text = getElementText(target);
+    var attributes = getElementAttributes(target);
+    console.log("Element clicked:", {
+      tagName: target.tagName,
+      selector: selector,
+      rect: rect
+    });
+
+    // 立即更新选中高亮
+    updateSelectedHighlight(target);
+
+    // 隐藏悬停高亮，因为现在是选中状态
+    highlightBox.style.display = "none";
+    tagLabel.style.display = "none";
+    var elementInfo = {
+      tagName: target.tagName.toLowerCase(),
+      rect: {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        width: rect.width,
+        height: rect.height,
+        x: rect.x,
+        y: rect.y
+      },
+      selector: selector,
+      text: text,
+      attributes: attributes,
+      url: window.location.href,
+      path: window.location.pathname,
+      timestamp: Date.now()
+    };
+    try {
+      window.parent.postMessage({
+        type: "iframe-element-click",
+        data: elementInfo,
+        source: "iframe-highlight-injector"
+      }, "*");
+    } catch (error) {
+      console.warn("无法发送消息到父窗口:", error);
+    }
+  }
+
+  // 监听来自父窗口的消息
+  function handleParentMessage(event) {
+    console.log("Received message from parent:", event.data);
+    if (event.data.type === "iframe-highlight-toggle") {
+      var enabled = event.data.enabled;
+      console.log("Highlight toggle:", enabled);
+      if (enabled) {
+        enableHighlight();
+      } else {
+        disableHighlight();
+      }
+    } else if (event.data.type === "enable-iframe-highlight") {
+      console.log("Enable iframe highlight");
+      enableHighlight();
+    } else if (event.data.type === "disable-iframe-highlight") {
+      console.log("Disable iframe highlight");
+      disableHighlight();
+    } else if (event.data.type === "toggle-iframe-highlight") {
+      var _enabled = event.data.enabled !== undefined ? event.data.enabled : !highlightEnabled;
+      console.log("Toggle iframe highlight to:", _enabled);
+      if (_enabled) {
+        enableHighlight();
+      } else {
+        disableHighlight();
+      }
+    } else if (event.data.type === "update-selected-element") {
+      var selector = event.data.selector;
+      console.log("Update selected element with selector:", selector);
+      if (selector) {
+        try {
+          var element = document.querySelector(selector);
+          console.log("Found element by selector:", element);
+          updateSelectedHighlight(element);
+        } catch (error) {
+          console.warn("Failed to select element:", error);
+          updateSelectedHighlight(null);
+        }
+      } else {
+        updateSelectedHighlight(null);
+      }
+    } else if (event.data.type === "clear-selected-element") {
+      console.log("Clear selected element");
+      updateSelectedHighlight(null);
+    }
+  }
+
+  // 启用高亮功能
+  function enableHighlight() {
+    console.log("Enabling highlight");
+    document.addEventListener("mouseover", handleMouseOver, true);
+    document.addEventListener("mouseout", handleMouseOut, true);
+    document.addEventListener("click", handleClick, true);
+    highlightEnabled = true;
+    overlay.style.display = "block";
+  }
+
+  // 禁用高亮功能
+  function disableHighlight() {
+    console.log("Disabling highlight");
+    highlightEnabled = false;
+    // 保持事件监听器，但通过 highlightEnabled 变量控制行为
+    // 这样可以保留选中状态的显示
+    highlightBox.style.display = "none";
+    tagLabel.style.display = "none";
+    // 不隐藏 selectedBox 和 selectedLabel，保留选中状态
+  }
+
+  // 完全禁用高亮功能（移除所有监听器）
+  function fullyDisableHighlight() {
+    console.log("Fully disabling highlight");
+    highlightEnabled = false;
+    document.removeEventListener("mouseover", handleMouseOver, true);
+    document.removeEventListener("mouseout", handleMouseOut, true);
+    document.removeEventListener("click", handleClick, true);
+    overlay.style.display = "none";
+    highlightBox.style.display = "none";
+    tagLabel.style.display = "none";
+    selectedBox.style.display = "none";
+    selectedLabel.style.display = "none";
+  }
+
+  // 添加事件监听
+  enableHighlight();
+  window.addEventListener("message", handleParentMessage);
+
+  // 暴露全局函数供外部调用
+  window.__iframeHighlightControl = {
+    enable: enableHighlight,
+    disable: disableHighlight,
+    fullyDisable: fullyDisableHighlight,
+    isEnabled: function isEnabled() {
+      return highlightEnabled;
+    },
+    getSelectedElement: function getSelectedElement() {
+      return selectedElement;
+    },
+    updateSelected: updateSelectedHighlight,
+    // 通过消息发送开关控制
+    sendToggleMessage: function sendToggleMessage(enabled) {
+      window.parent.postMessage({
+        type: 'iframe-highlight-status',
+        enabled: enabled || highlightEnabled,
+        source: 'iframe-highlight-injector'
+      }, '*');
+    }
+  };
+
+  // 通知父窗口脚本已加载
+  try {
+    window.parent.postMessage({
+      type: "iframe-highlight-ready",
+      data: {
+        url: window.location.href,
+        userAgent: navigator.userAgent,
+        timestamp: Date.now()
+      },
+      source: "iframe-highlight-injector"
+    }, "*");
+  } catch (error) {
+    console.warn("无法发送就绪消息到父窗口:", error);
+  }
+
+  // 清理函数
+  window.__iframeHighlightCleanup = function () {
+    fullyDisableHighlight();
+    window.removeEventListener("message", handleParentMessage);
+    if (overlay.parentElement) {
+      overlay.parentElement.removeChild(overlay);
+    }
+    delete window.__iframeHighlightInitialized;
+    delete window.__iframeHighlightCleanup;
+  };
+})();
+
+</script>
+</body>
+</html>
