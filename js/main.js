@@ -3,19 +3,76 @@ let currentModuleId = null;
 let activePhraseTarget = null; // 'front' or 'back' (for current module)
 
 // --- Initialization ---
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    // 1. Initialize UI Tabs
     initGeneratorTab();
     initLangTab();
     initPhrasesTab();
-    initDataTab(); // New
+    initDataTab();
+    
+    // 2. Load Draft
     loadDraft();
     
-    // Auto-save listeners
+    // 3. Check Network Startup Strategy
+    await checkNetworkStartup();
+
+    // 4. Auto-save listeners
     document.querySelectorAll('#tab-content-generator input, #tab-content-generator textarea, #tab-content-generator select').forEach(el => {
         el.addEventListener('input', saveDraftState);
         el.addEventListener('change', saveDraftState);
     });
 });
+
+async function checkNetworkStartup() {
+    const settings = store.getNetworkSettings();
+    const statusEl = document.getElementById('network-status');
+    
+    if (!settings.url || settings.strategy === 'manual') {
+        if (statusEl) statusEl.innerHTML = '<span class="inline-block w-2 h-2 rounded-full bg-gray-300 mr-1"></span> 手动模式';
+        return;
+    }
+
+    // UI Feedback
+    if (statusEl) statusEl.innerHTML = '<span class="inline-block w-2 h-2 rounded-full bg-yellow-400 mr-1 animate-pulse"></span> 正在检查更新...';
+
+    const tryFetch = async () => {
+        try {
+            const data = await store.fetchNetworkConfig(settings.url);
+            // Auto merge or overwrite? For startup, usually we merge or overwrite based on user preference.
+            // Let's assume 'network-first' means overwrite (or robust merge), 'local-first' is backup.
+            // Given the requirement "Network > Local", we update.
+            
+            store.restoreFullDump(data, 'overwrite'); // Or merge, depending on policy. Overwrite ensures consistency with remote.
+            
+            // Refresh UI
+            renderLangList();
+            renderPhrasesList();
+            refreshGeneratorDropdowns();
+            updateStats();
+            
+            // Update last updated timestamp
+            settings.lastUpdated = new Date().toISOString();
+            store.saveNetworkSettings(settings);
+            
+            if (statusEl) statusEl.innerHTML = `<span class="inline-block w-2 h-2 rounded-full bg-green-500 mr-1"></span> 已更新 (${new Date().toLocaleTimeString()})`;
+            return true;
+        } catch (e) {
+            console.warn("Startup network fetch failed:", e);
+            if (statusEl) statusEl.innerHTML = '<span class="inline-block w-2 h-2 rounded-full bg-red-400 mr-1"></span> 更新失败，使用本地配置';
+            return false;
+        }
+    };
+
+    if (settings.strategy === 'network-first') {
+        await tryFetch();
+    } else if (settings.strategy === 'local-first') {
+        // Only fetch if local seems empty? Or just background update?
+        // Usually "Local First" means use local, but maybe background update?
+        // Or it means "Use local if available, otherwise network".
+        // Let's interpret as: Use local immediately (which we did by init), and try fetch in background to update for next time or live update.
+        tryFetch(); 
+    }
+}
 
 function switchMainTab(tabName) {
     // Hide all contents
@@ -38,6 +95,10 @@ function switchMainTab(tabName) {
     // Refresh stats if switching to data
     if (tabName === 'data') {
         updateStats();
+        // Update network status display
+        const settings = store.getNetworkSettings();
+        document.getElementById('network-config-url').value = settings.url || '';
+        document.getElementById('network-startup-strategy').value = settings.strategy || 'manual';
     }
 }
 
@@ -387,6 +448,74 @@ function deletePhrase(type, index) {
 
 function initDataTab() {
     updateStats();
+    // Load initial network settings into UI
+    const settings = store.getNetworkSettings();
+    document.getElementById('network-config-url').value = settings.url || '';
+    document.getElementById('network-startup-strategy').value = settings.strategy || 'manual';
+    
+    // Check local storage for last update time if desired
+}
+
+// Network Config & Fetch Logic
+async function fetchNetworkPreview() {
+    const url = document.getElementById('network-config-url').value;
+    if (!url) {
+        alert("请输入有效的 URL");
+        return;
+    }
+
+    const btn = document.querySelector('button[onclick="fetchNetworkPreview()"]');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> 加载中...';
+    btn.disabled = true;
+
+    try {
+        const data = await store.fetchNetworkConfig(url);
+        
+        // Use the common import handler
+        pendingImportData = data;
+        
+        // Show preview
+        document.getElementById('import-preview-area').classList.remove('hidden');
+        document.getElementById('import-preview-text').textContent = JSON.stringify(data, null, 2);
+        
+        // Also save this URL as the one to use
+        saveNetworkSettings(false); // don't alert
+        
+    } catch (e) {
+        alert("获取配置失败: " + e.message);
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+}
+
+function saveNetworkSettings(showAlert = true) {
+    const url = document.getElementById('network-config-url').value;
+    const strategy = document.getElementById('network-startup-strategy').value;
+    
+    const settings = store.getNetworkSettings();
+    settings.url = url;
+    settings.strategy = strategy;
+    
+    store.saveNetworkSettings(settings);
+    
+    if (showAlert) {
+        // Visual feedback instead of annoying alert
+        const btn = document.getElementById('network-startup-strategy');
+        const originalBg = btn.style.backgroundColor;
+        btn.style.backgroundColor = '#d1fae5'; // light green
+        setTimeout(() => {
+            btn.style.backgroundColor = originalBg;
+        }, 500);
+    }
+}
+
+// Defaults Export
+function exportDefaults() {
+    const defaults = store.getDefaults();
+    // Clean up internal keys if needed
+    downloadFile('VibePrompt_DefaultConfig.json', JSON.stringify(defaults, null, 2));
 }
 
 function updateStats() {

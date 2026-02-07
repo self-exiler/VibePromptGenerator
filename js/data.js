@@ -1,5 +1,7 @@
 // Default Data Configuration
 const defaultData = {
+    version: "1.1.0",
+    lastUpdated: new Date().toISOString(),
     languages: [
         { 
             id: 'cpp', 
@@ -87,7 +89,8 @@ const defaultData = {
     networkConfig: {
         url: "",
         strategy: "manual", // manual, network-first, local-first
-        lastUpdated: null
+        lastUpdated: null,
+        autoMerge: true
     }
 };
 
@@ -123,6 +126,7 @@ class DataStore {
 
     async fetchNetworkConfig(url) {
         try {
+            console.log("Fetching config from:", url);
             const response = await fetch(url);
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -202,55 +206,35 @@ class DataStore {
         return cleanDraft;
     }
 
-    // --- Data Management (New) ---
+    // --- Data Management ---
 
     getFullDump() {
         return {
-            version: "1.0",
+            version: defaultData.version,
             timestamp: new Date().toISOString(),
             languages: this.getLanguages(),
             phrases: this.getPhrases(),
-            draft: this.getDraft()
+            draft: this.getDraft(),
+            networkConfig: this.getNetworkSettings()
         };
     }
 
+    // mode: 'overwrite' | 'merge'
     restoreFullDump(data, mode = 'overwrite') {
         try {
+            console.log(`Restoring data in ${mode} mode`, data);
+            
             if (mode === 'overwrite') {
                 if (data.languages) this.saveLanguages(data.languages);
                 if (data.phrases) this.savePhrases(data.phrases);
-                // We typically don't force restore draft unless user wants, but for full backup we do
+                // Only overwrite draft if it exists in data and we are explicitly doing a full restore
                 if (data.draft) this.saveDraft(data.draft);
+                // We usually don't overwrite network config from import unless specified, 
+                // but let's keep local network config safe or optional.
+                // For now, ignoring networkConfig from import to prevent locking self out
             } else if (mode === 'merge') {
-                // Merge Languages
-                if (data.languages) {
-                    const currentLangs = this.getLanguages();
-                    data.languages.forEach(newLang => {
-                        const existingIdx = currentLangs.findIndex(l => l.id === newLang.id);
-                        if (existingIdx === -1) {
-                            currentLangs.push(newLang);
-                        } else {
-                            // Optional: Merge wheels? For now, keep existing config to avoid conflict
-                            // Or overwrite if name matches? Simpler to just add if ID different.
-                            // If ID matches, we skip in merge mode to preserve local changes
-                        }
-                    });
-                    this.saveLanguages(currentLangs);
-                }
-
-                // Merge Phrases
-                if (data.phrases) {
-                    const currentPhrases = this.getPhrases();
-                    ['frontend', 'backend'].forEach(type => {
-                        if (data.phrases[type]) {
-                            if (!currentPhrases[type]) currentPhrases[type] = [];
-                            const set = new Set(currentPhrases[type]);
-                            data.phrases[type].forEach(p => set.add(p));
-                            currentPhrases[type] = Array.from(set);
-                        }
-                    });
-                    this.savePhrases(currentPhrases);
-                }
+                this.mergeLanguages(data.languages);
+                this.mergePhrases(data.phrases);
             }
             return true;
         } catch (e) {
@@ -259,11 +243,71 @@ class DataStore {
         }
     }
 
+    mergeLanguages(newLangs) {
+        if (!newLangs || !Array.isArray(newLangs)) return;
+        
+        const currentLangs = this.getLanguages();
+        let changed = false;
+
+        newLangs.forEach(newLang => {
+            const existingIdx = currentLangs.findIndex(l => l.id === newLang.id);
+            if (existingIdx === -1) {
+                // New language, add it
+                currentLangs.push(newLang);
+                changed = true;
+            } else {
+                // Existing language, merge wheels
+                const existingLang = currentLangs[existingIdx];
+                if (newLang.wheels && Array.isArray(newLang.wheels)) {
+                     const wheelSet = new Set(existingLang.wheels);
+                     newLang.wheels.forEach(w => {
+                         if (!wheelSet.has(w)) {
+                             existingLang.wheels.push(w);
+                             changed = true;
+                         }
+                     });
+                }
+                // Optional: Update name if changed? 
+                // existingLang.name = newLang.name; 
+            }
+        });
+
+        if (changed) {
+            this.saveLanguages(currentLangs);
+        }
+    }
+
+    mergePhrases(newPhrases) {
+        if (!newPhrases) return;
+        
+        const currentPhrases = this.getPhrases();
+        let changed = false;
+
+        ['frontend', 'backend'].forEach(type => {
+            if (newPhrases[type] && Array.isArray(newPhrases[type])) {
+                if (!currentPhrases[type]) currentPhrases[type] = [];
+                const set = new Set(currentPhrases[type]);
+                newPhrases[type].forEach(p => {
+                    if (!set.has(p)) {
+                        set.add(p);
+                        changed = true;
+                    }
+                });
+                currentPhrases[type] = Array.from(set);
+            }
+        });
+
+        if (changed) {
+            this.savePhrases(currentPhrases);
+        }
+    }
+
     clearAllData() {
         localStorage.removeItem('vibe_config_langs');
         localStorage.removeItem('vibe_config_phrases');
         localStorage.removeItem('vibe_draft');
-        // Re-init with defaults immediately to prevent crash
+        localStorage.removeItem('vibe_network_config');
+        // Re-init with defaults immediately
         this.init();
     }
 
