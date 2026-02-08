@@ -1,0 +1,100 @@
+version: "1.2.0"
+
+languages:
+  - id: cpp
+    name: C++
+    wheels:
+      - Qt
+      - Boost
+      - OpenCV
+      - Poco
+      - FFmpeg
+      - gRPC
+
+  - id: python
+    name: Python
+    wheels:
+      - Pandas
+      - NumPy
+      - FastAPI
+      - Django
+      - Flask
+      - PyQt
+      - TensorFlow
+      - Scikit-learn
+
+  - id: csharp
+    name: C#
+    wheels:
+      - .NET Core
+      - WPF
+      - Entity Framework
+      - Newtonsoft.Json
+      - Serilog
+      - SignalR
+
+  - id: js
+    name: JavaScript/TypeScript
+    wheels:
+      - React
+      - Vue
+      - Express
+      - NestJS
+      - TailwindCSS
+      - Three.js
+
+  - id: java
+    name: Java
+    wheels:
+      - Spring Boot
+      - MyBatis
+      - Hibernate
+      - Netty
+      - Apache Commons
+
+  - id: go
+    name: Go
+    wheels:
+      - Gin
+      - Gorm
+      - Viper
+      - Zap
+      - Cobra
+
+phrases:
+  frontend:
+    - 界面响应式设计，适配不同分辨率
+    - 支持深色模式/浅色模式切换
+    - 交互操作需有明确的加载状态提示
+    - 表单输入需包含完整的校验逻辑
+    - 界面风格需符合Material Design规范
+    - 关键操作需增加二次确认弹窗
+    - 数据列表需支持分页、排序和筛选
+    - 图表展示需支持动态数据更新
+
+  backend:
+    - API接口需遵循RESTful规范
+    - 所有接口需包含统一的鉴权机制
+    - 高并发场景下需通过Redis进行缓存
+    - 数据库设计需满足第三范式
+    - 关键业务日志需持久化存储
+    - 接口响应时间需控制在200ms以内
+    - 异常情况需返回统一的错误码结构
+    - 敏感数据需加密存储
+
+architectures:
+  - B/S架构 (Browser/Server)
+  - C/S架构 (Client/Server)
+  - 桌面应用程序 (Desktop App)
+  - 命令行工具 (CLI)
+  - 移动端App (Mobile App)
+  - 微服务架构 (Microservices)
+  - 嵌入式系统 (Embedded System)
+
+environments:
+  - Linux (Bash)
+  - Windows (PowerShell)
+  - Windows (CMD)
+  - macOS (Zsh)
+  - Docker Container
+  - Kubernetes Cluster

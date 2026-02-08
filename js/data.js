@@ -1,137 +1,205 @@
-// Default Data Configuration
-const defaultData = {
-    version: "1.1.0",
-    lastUpdated: new Date().toISOString(),
-    languages: [
-        { 
-            id: 'cpp', 
-            name: 'C++', 
-            wheels: ['Qt', 'Boost', 'OpenCV', 'Poco', 'FFmpeg', 'gRPC'] 
-        },
-        { 
-            id: 'python', 
-            name: 'Python', 
-            wheels: ['Pandas', 'NumPy', 'FastAPI', 'Django', 'Flask', 'PyQt', 'TensorFlow', 'Scikit-learn'] 
-        },
-        { 
-            id: 'csharp', 
-            name: 'C#', 
-            wheels: ['.NET Core', 'WPF', 'Entity Framework', 'Newtonsoft.Json', 'Serilog', 'SignalR'] 
-        },
-        { 
-            id: 'js', 
-            name: 'JavaScript/TypeScript', 
-            wheels: ['React', 'Vue', 'Express', 'NestJS', 'TailwindCSS', 'Three.js'] 
-        },
-        { 
-            id: 'java', 
-            name: 'Java', 
-            wheels: ['Spring Boot', 'MyBatis', 'Hibernate', 'Netty', 'Apache Commons'] 
-        },
-        {
-            id: 'go',
-            name: 'Go',
-            wheels: ['Gin', 'Gorm', 'Viper', 'Zap', 'Cobra']
-        }
-    ],
-    phrases: {
-        frontend: [
-            "界面响应式设计，适配不同分辨率",
-            "支持深色模式/浅色模式切换",
-            "交互操作需有明确的加载状态提示",
-            "表单输入需包含完整的校验逻辑",
-            "界面风格需符合Material Design规范",
-            "关键操作需增加二次确认弹窗",
-            "数据列表需支持分页、排序和筛选",
-            "图表展示需支持动态数据更新"
-        ],
-        backend: [
-            "API接口需遵循RESTful规范",
-            "所有接口需包含统一的鉴权机制",
-            "高并发场景下需通过Redis进行缓存",
-            "数据库设计需满足第三范式",
-            "关键业务日志需持久化存储",
-            "接口响应时间需控制在200ms以内",
-            "异常情况需返回统一的错误码结构",
-            "敏感数据需加密存储"
-        ]
-    },
-    architectures: [
-        "B/S架构 (Browser/Server)",
-        "C/S架构 (Client/Server)",
-        "桌面应用程序 (Desktop App)",
-        "命令行工具 (CLI)",
-        "移动端App (Mobile App)",
-        "微服务架构 (Microservices)",
-        "嵌入式系统 (Embedded System)"
-    ],
-    environments: [
-        "Linux (Bash)",
-        "Windows (PowerShell)",
-        "Windows (CMD)",
-        "macOS (Zsh)",
-        "Docker Container",
-        "Kubernetes Cluster"
-    ],
-    // Draft content for auto-save
+// Storage Keys Constants
+const STORAGE_KEYS = {
+    LANGS: 'vibe_config_langs',
+    PHRASES: 'vibe_config_phrases',
+    DRAFT: 'vibe_draft',
+    NETWORK_CONFIG: 'vibe_network_config'
+};
+
+const DEFAULT_DATA = {
+    version: "1.2.0",
+    languages: [],
+    phrases: { frontend: [], backend: [] },
+    architectures: [],
+    environments: [],
     draft: {
         selectedLang: "",
         selectedWheels: [],
         selectedArch: "",
         selectedEnv: "",
         generalDesc: "",
-        modules: [
-            { id: Date.now(), name: "核心模块", front: "", back: "" }
-        ],
+        modules: [{ id: Date.now(), name: "核心模块", front: "", back: "" }],
         notes: ""
     },
-    // Network Config Defaults
-    networkConfig: {
-        url: "",
-        strategy: "manual", // manual, network-first, local-first
-        lastUpdated: null,
-        autoMerge: true
+    networkConfig: { url: "", strategy: "manual", lastUpdated: null }
+};
+
+const Utils = {
+    isEmpty: (value) => {
+        if (value === null || value === undefined) return true;
+        if (typeof value === 'string') return value.trim() === '';
+        if (Array.isArray(value)) return value.length === 0;
+        return false;
+    },
+    
+    debounce: (func, wait) => {
+        let timeout;
+        return function executedFunction(...args) {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func(...args), wait);
+        };
+    },
+    
+    generateId: () => `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    
+    isValidUrl: (string) => {
+        try {
+            new URL(string);
+            return true;
+        } catch (_) {
+            return false;
+        }
     }
 };
 
 // Data Store Class
 class DataStore {
     constructor() {
+        this.defaultData = null;
         this.init();
     }
 
-    init() {
-        if (!localStorage.getItem('vibe_config_langs')) {
-            this.saveLanguages(defaultData.languages);
+    async init() {
+        try {
+            // Load default data from data.yaml
+            await this.loadDefaultData();
+
+            // Initialize localStorage with defaults if empty
+            if (!localStorage.getItem(STORAGE_KEYS.LANGS)) {
+                this.saveLanguages(this.defaultData?.languages || []);
+            }
+            if (!localStorage.getItem(STORAGE_KEYS.PHRASES)) {
+                this.savePhrases(this.defaultData?.phrases || { frontend: [], backend: [] });
+            }
+            if (!localStorage.getItem(STORAGE_KEYS.DRAFT)) {
+                this.saveDraft(this.defaultData?.draft || DEFAULT_DATA.draft);
+            }
+        } catch (e) {
+            console.error('DataStore initialization error:', e);
+            // Fallback: ensure defaults exist
+            this.defaultData = DEFAULT_DATA;
         }
-        if (!localStorage.getItem('vibe_config_phrases')) {
-            this.savePhrases(defaultData.phrases);
+    }
+
+    async loadDefaultData() {
+        try {
+            const response = await fetch('data.yaml');
+            if (!response.ok) throw new Error('Failed to load data.yaml');
+            this.defaultData = this.parseYAML(await response.text());
+        } catch (e) {
+            console.error('Failed to load data.yaml, using fallback:', e);
+            this.defaultData = DEFAULT_DATA;
         }
-        if (!localStorage.getItem('vibe_draft')) {
-            this.saveDraft(defaultData.draft);
+    }
+
+    parseYAML(yamlText) {
+        const lines = yamlText.split('\n');
+        const result = { version: '', languages: [], phrases: { frontend: [], backend: [] }, architectures: [], environments: [] };
+        
+        let currentSection = null;
+        let currentLang = null;
+        let currentList = null;
+        
+        for (const line of lines) {
+            const trimmed = line.trim();
+            
+            if (!trimmed || trimmed.startsWith('#')) continue;
+            
+            if (trimmed.startsWith('version:')) {
+                result.version = trimmed.split(':')[1].trim().replace(/"/g, '');
+                continue;
+            }
+            
+            if (trimmed.startsWith('languages:')) { currentSection = 'languages'; continue; }
+            if (trimmed.startsWith('phrases:')) { currentSection = 'phrases'; continue; }
+            if (trimmed.startsWith('architectures:')) { currentSection = 'architectures'; currentList = []; continue; }
+            if (trimmed.startsWith('environments:')) { currentSection = 'environments'; currentList = []; continue; }
+            
+            const indent = line.search(/\S/);
+            
+            if (currentSection === 'languages') {
+                if (indent === 2 && trimmed.startsWith('- id:')) {
+                    if (currentLang) result.languages.push(currentLang);
+                    currentLang = { id: trimmed.split(':')[1].trim(), name: '', wheels: [] };
+                } else if (currentLang && indent === 4) {
+                    if (trimmed.startsWith('name:')) currentLang.name = trimmed.split(':')[1].trim();
+                } else if (currentLang && indent === 6 && trimmed.startsWith('-')) {
+                    currentLang.wheels.push(trimmed.substring(2).trim());
+                }
+            } else if (currentSection === 'phrases') {
+                if (indent === 2 && trimmed.startsWith('frontend:')) {
+                    currentList = result.phrases.frontend;
+                } else if (indent === 2 && trimmed.startsWith('backend:')) {
+                    currentList = result.phrases.backend;
+                } else if (indent === 4 && trimmed.startsWith('-')) {
+                    currentList.push(trimmed.substring(2).trim());
+                }
+            } else if ((currentSection === 'architectures' || currentSection === 'environments') && trimmed.startsWith('-')) {
+                currentList.push(trimmed.substring(2).trim());
+            }
         }
-        if (!localStorage.getItem('vibe_network_config')) {
-            this.saveNetworkSettings(defaultData.networkConfig);
-        }
+        
+        if (currentLang) result.languages.push(currentLang);
+        if (currentSection === 'architectures') result.architectures = currentList;
+        if (currentSection === 'environments') result.environments = currentList;
+        
+        return result;
+    }
+
+    toYAML(data) {
+        const lines = [`version: "${data.version}"`, '', 'languages:'];
+        
+        data.languages?.forEach(lang => {
+            lines.push(`  - id: ${lang.id}`, `    name: ${lang.name}`, '    wheels:');
+            lang.wheels?.forEach(w => lines.push(`      - ${w}`));
+        });
+        
+        lines.push('', 'phrases:', '  frontend:');
+        data.phrases?.frontend?.forEach(p => lines.push(`    - ${p}`));
+        lines.push('  backend:');
+        data.phrases?.backend?.forEach(p => lines.push(`    - ${p}`));
+        
+        lines.push('', 'architectures:');
+        data.architectures?.forEach(a => lines.push(`  - ${a}`));
+        
+        lines.push('', 'environments:');
+        data.environments?.forEach(e => lines.push(`  - ${e}`));
+        
+        return lines.join('\n');
     }
 
     // --- Network Config ---
     getNetworkSettings() {
-        return JSON.parse(localStorage.getItem('vibe_network_config') || JSON.stringify(defaultData.networkConfig));
+        const stored = localStorage.getItem(STORAGE_KEYS.NETWORK_CONFIG);
+        return stored ? JSON.parse(stored) : this.defaultData.networkConfig;
     }
 
     saveNetworkSettings(settings) {
-        localStorage.setItem('vibe_network_config', JSON.stringify(settings));
+        localStorage.setItem(STORAGE_KEYS.NETWORK_CONFIG, JSON.stringify(settings));
     }
 
     async fetchNetworkConfig(url) {
+        if (!Utils.isValidUrl(url)) {
+            throw new Error('Invalid URL format');
+        }
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
         try {
             console.log("Fetching config from:", url);
-            const response = await fetch(url);
+            const response = await fetch(url, {
+                signal: controller.signal,
+                headers: { 'Accept': 'application/json, text/yaml, text/plain' },
+                mode: 'cors'
+            });
+            
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
-            const data = await response.json();
+            
+            const text = await response.text();
+            const data = text.startsWith('{') ? JSON.parse(text) : this.parseYAML(text);
             
             // Validate basic structure
             if (!data.languages && !data.phrases) {
@@ -140,68 +208,71 @@ class DataStore {
             
             return data;
         } catch (error) {
+            if (error.name === 'AbortError') {
+                throw new Error('Request timeout (10s exceeded)');
+            }
             console.error("Network fetch failed:", error);
             throw error;
+        } finally {
+            clearTimeout(timeoutId);
         }
     }
 
     // --- Defaults ---
     getDefaults() {
-        return defaultData;
+        return this.defaultData;
     }
 
     // --- Languages & Wheels ---
     getLanguages() {
-        return JSON.parse(localStorage.getItem('vibe_config_langs') || '[]');
+        const stored = localStorage.getItem(STORAGE_KEYS.LANGS);
+        return stored ? JSON.parse(stored) : [];
     }
 
     saveLanguages(data) {
-        localStorage.setItem('vibe_config_langs', JSON.stringify(data));
+        localStorage.setItem(STORAGE_KEYS.LANGS, JSON.stringify(data));
     }
 
     // --- Phrases ---
     getPhrases() {
-        return JSON.parse(localStorage.getItem('vibe_config_phrases') || '{}');
+        const stored = localStorage.getItem(STORAGE_KEYS.PHRASES);
+        return stored ? JSON.parse(stored) : {};
     }
 
     savePhrases(data) {
-        localStorage.setItem('vibe_config_phrases', JSON.stringify(data));
+        localStorage.setItem(STORAGE_KEYS.PHRASES, JSON.stringify(data));
     }
 
     // --- Constants ---
     getArchitectures() {
-        return defaultData.architectures;
+        return this.defaultData.architectures || [];
     }
 
     getEnvironments() {
-        return defaultData.environments;
+        return this.defaultData.environments || [];
     }
 
     // --- Draft (Current Work) ---
     getDraft() {
-        try {
-            const draft = JSON.parse(localStorage.getItem('vibe_draft'));
-            // Ensure basic structure exists if loaded from old version
-            if (!draft || !draft.modules || draft.modules.length === 0) {
-                // If corrupted or empty, re-init basic structure
-                const newDraft = JSON.parse(JSON.stringify(defaultData.draft));
-                newDraft.modules[0].id = Date.now();
-                return newDraft;
-            }
-            return draft;
-        } catch (e) {
-            return defaultData.draft;
+        const stored = localStorage.getItem(STORAGE_KEYS.DRAFT);
+        if (!stored) return this.defaultData.draft;
+
+        const draft = JSON.parse(stored);
+        if (!draft?.modules?.length) {
+            const newDraft = JSON.parse(JSON.stringify(this.defaultData.draft));
+            newDraft.modules[0].id = Utils.generateId();
+            return newDraft;
         }
+        return draft;
     }
 
     saveDraft(data) {
-        localStorage.setItem('vibe_draft', JSON.stringify(data));
+        localStorage.setItem(STORAGE_KEYS.DRAFT, JSON.stringify(data));
     }
     
     resetDraft() {
-        const cleanDraft = JSON.parse(JSON.stringify(defaultData.draft));
-        // Give new ID to avoid conflict
-        cleanDraft.modules[0].id = Date.now();
+        const cleanDraft = JSON.parse(JSON.stringify(this.defaultData.draft));
+        cleanDraft.modules[0].id = Utils.generateId();
         this.saveDraft(cleanDraft);
         return cleanDraft;
     }
@@ -210,7 +281,7 @@ class DataStore {
 
     getFullDump() {
         return {
-            version: defaultData.version,
+            version: this.defaultData.version,
             timestamp: new Date().toISOString(),
             languages: this.getLanguages(),
             phrases: this.getPhrases(),
@@ -227,11 +298,7 @@ class DataStore {
             if (mode === 'overwrite') {
                 if (data.languages) this.saveLanguages(data.languages);
                 if (data.phrases) this.savePhrases(data.phrases);
-                // Only overwrite draft if it exists in data and we are explicitly doing a full restore
                 if (data.draft) this.saveDraft(data.draft);
-                // We usually don't overwrite network config from import unless specified, 
-                // but let's keep local network config safe or optional.
-                // For now, ignoring networkConfig from import to prevent locking self out
             } else if (mode === 'merge') {
                 this.mergeLanguages(data.languages);
                 this.mergePhrases(data.phrases);
@@ -247,33 +314,33 @@ class DataStore {
         if (!newLangs || !Array.isArray(newLangs)) return;
         
         const currentLangs = this.getLanguages();
+        const langMap = new Map(currentLangs.map(l => [l.id, l]));
         let changed = false;
 
         newLangs.forEach(newLang => {
-            const existingIdx = currentLangs.findIndex(l => l.id === newLang.id);
-            if (existingIdx === -1) {
-                // New language, add it
-                currentLangs.push(newLang);
-                changed = true;
-            } else {
-                // Existing language, merge wheels
-                const existingLang = currentLangs[existingIdx];
+            if (!newLang.id) return;
+            
+            if (langMap.has(newLang.id)) {
+                // Merge wheels
+                const existing = langMap.get(newLang.id);
                 if (newLang.wheels && Array.isArray(newLang.wheels)) {
-                     const wheelSet = new Set(existingLang.wheels);
-                     newLang.wheels.forEach(w => {
-                         if (!wheelSet.has(w)) {
-                             existingLang.wheels.push(w);
-                             changed = true;
-                         }
-                     });
+                    const wheelSet = new Set(existing.wheels || []);
+                    newLang.wheels.forEach(w => {
+                        if (!wheelSet.has(w)) {
+                            existing.wheels.push(w);
+                            changed = true;
+                        }
+                    });
                 }
-                // Optional: Update name if changed? 
-                // existingLang.name = newLang.name; 
+            } else {
+                // Add new language
+                langMap.set(newLang.id, { ...newLang });
+                changed = true;
             }
         });
 
         if (changed) {
-            this.saveLanguages(currentLangs);
+            this.saveLanguages(Array.from(langMap.values()));
         }
     }
 
@@ -303,11 +370,7 @@ class DataStore {
     }
 
     clearAllData() {
-        localStorage.removeItem('vibe_config_langs');
-        localStorage.removeItem('vibe_config_phrases');
-        localStorage.removeItem('vibe_draft');
-        localStorage.removeItem('vibe_network_config');
-        // Re-init with defaults immediately
+        Object.values(STORAGE_KEYS).forEach(key => localStorage.removeItem(key));
         this.init();
     }
 
@@ -326,4 +389,5 @@ class DataStore {
     }
 }
 
+// Initialize global store
 window.store = new DataStore();

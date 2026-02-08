@@ -1,144 +1,259 @@
-// State Management
-let currentModuleId = null;
-let activePhraseTarget = null; // 'front' or 'back' (for current module)
+// ==================== State Management ====================
+const state = {
+    currentModuleId: null,
+    activePhraseTarget: null,
+    modules: [],
+    pendingImportData: null
+};
 
-// --- Initialization ---
+// ==================== Utility Functions ====================
+const $ = (selector) => document.querySelector(selector);
+const $$ = (selector) => document.querySelectorAll(selector);
+
+const Validator = {
+    isEmpty: (value) => Utils.isEmpty(value),
+    isNotEmpty: (value) => !Utils.isEmpty(value),
+    validateLanguageName: (name) => {
+        const trimmed = name ? name.trim() : '';
+        if (Utils.isEmpty(trimmed)) return { valid: false, message: '语言名称不能为空' };
+        if (trimmed.length > 50) return { valid: false, message: '语言名称不能超过50个字符' };
+        return { valid: true, value: trimmed };
+    },
+    validateUrl: (url) => {
+        if (Utils.isEmpty(url)) return { valid: false, message: '请输入有效的 URL' };
+        if (!Utils.isValidUrl(url)) return { valid: false, message: 'URL 格式无效' };
+        return { valid: true, value: url.trim() };
+    },
+    validateWheels: (wheelsStr) => {
+        const wheels = wheelsStr.split(/[,，]/).map(s => s.trim()).filter(s => s);
+        if (wheels.length === 0) return { valid: false, message: '请至少输入一个库/轮子' };
+        if (wheels.some(w => w.length > 50)) return { valid: false, message: '轮子名称不能超过50个字符' };
+        return { valid: true, value: wheels };
+    }
+};
+
+// ==================== Toast Notification ====================
+const Toast = {
+    show(message, type = 'info') {
+        const existing = $('.toast-container');
+        const container = existing || document.createElement('div');
+        
+        if (!existing) {
+            container.className = 'toast-container fixed top-4 right-4 z-50 space-y-2';
+            document.body.appendChild(container);
+        }
+
+        const toast = document.createElement('div');
+        const colors = {
+            success: 'bg-green-500',
+            error: 'bg-red-500',
+            warning: 'bg-yellow-500',
+            info: 'bg-blue-500'
+        };
+        const icons = {
+            success: 'fa-check-circle',
+            error: 'fa-exclamation-circle',
+            warning: 'fa-exclamation-triangle',
+            info: 'fa-info-circle'
+        };
+
+        toast.className = `${colors[type]} text-white px-6 py-3 rounded-lg shadow-lg flex items-center space-x-3 animate-slideIn`;
+        toast.innerHTML = `
+            <i class="fas ${icons[type]}"></i>
+            <span>${message}</span>
+        `;
+
+        container.appendChild(toast);
+
+        setTimeout(() => {
+            toast.classList.add('animate-slideOut');
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    }
+};
+
+// ==================== Modal ====================
+const Modal = {
+    open(id) {
+        $(`#${id}`).classList.remove('hidden');
+    },
+    close(id) {
+        $(`#${id}`).classList.add('hidden');
+    },
+    confirm(options) {
+        return new Promise((resolve) => {
+            const existing = $('#modal-confirm');
+            if (existing) existing.remove();
+
+            const modal = document.createElement('div');
+            modal.id = 'modal-confirm';
+            modal.className = 'fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50';
+            modal.innerHTML = `
+                <div class="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <h3 class="text-lg font-medium text-gray-900">${options.title || '确认操作'}</h3>
+                    </div>
+                    <div class="p-6">
+                        <p class="text-gray-700">${options.message}</p>
+                    </div>
+                    <div class="px-6 py-4 bg-gray-50 rounded-b-lg flex justify-end space-x-3">
+                        <button id="modal-confirm-cancel" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+                            取消
+                        </button>
+                        <button id="modal-confirm-ok" class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700">
+                            确定
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+
+            $('#modal-confirm-cancel').onclick = () => {
+                modal.remove();
+                resolve(false);
+            };
+            $('#modal-confirm-ok').onclick = () => {
+                modal.remove();
+                resolve(true);
+            };
+        });
+    },
+    prompt(options) {
+        return new Promise((resolve) => {
+            const existing = $('#modal-prompt');
+            if (existing) existing.remove();
+
+            const modal = document.createElement('div');
+            modal.id = 'modal-prompt';
+            modal.className = 'fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50';
+            modal.innerHTML = `
+                <div class="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <h3 class="text-lg font-medium text-gray-900">${options.title || '输入'}</h3>
+                    </div>
+                    <div class="p-6 space-y-4">
+                        <p class="text-gray-700">${options.message}</p>
+                        <input type="text" id="modal-prompt-input" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border" placeholder="${options.placeholder || ''}" value="${options.defaultValue || ''}">
+                    </div>
+                    <div class="px-6 py-4 bg-gray-50 rounded-b-lg flex justify-end space-x-3">
+                        <button id="modal-prompt-cancel" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+                            取消
+                        </button>
+                        <button id="modal-prompt-ok" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">
+                            确定
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+            const input = $('#modal-prompt-input');
+            input.focus();
+
+            $('#modal-prompt-cancel').onclick = () => {
+                modal.remove();
+                resolve(null);
+            };
+            $('#modal-prompt-ok').onclick = () => {
+                modal.remove();
+                resolve(input.value);
+            };
+            input.onkeydown = (e) => {
+                if (e.key === 'Enter') $('#modal-prompt-ok').click();
+                if (e.key === 'Escape') $('#modal-prompt-cancel').click();
+            };
+        });
+    }
+};
+
+// ==================== Initialization ====================
 document.addEventListener('DOMContentLoaded', async () => {
-    // 1. Initialize UI Tabs
-    initGeneratorTab();
-    initLangTab();
-    initPhrasesTab();
-    initDataTab();
-    
-    // 2. Load Draft
-    loadDraft();
-    
-    // 3. Check Network Startup Strategy
-    await checkNetworkStartup();
-
-    // 4. Auto-save listeners
-    document.querySelectorAll('#tab-content-generator input, #tab-content-generator textarea, #tab-content-generator select').forEach(el => {
-        el.addEventListener('input', saveDraftState);
-        el.addEventListener('change', saveDraftState);
-    });
+    try {
+        await initGeneratorTab();
+        initLangTab();
+        initPhrasesTab();
+        initDataTab();
+        loadDraft();
+        
+        // Auto-save listeners with debounce
+        const debouncedSave = Utils.debounce(saveDraftState, 500);
+        const inputs = $$('#tab-content-generator input, #tab-content-generator textarea, #tab-content-generator select');
+        inputs.forEach(el => {
+            el?.addEventListener?.('input', debouncedSave);
+            el?.addEventListener?.('change', debouncedSave);
+        });
+    } catch (e) {
+        console.error('Initialization error:', e);
+        Toast.show('应用初始化失败，请刷新页面', 'error');
+    }
 });
 
-async function checkNetworkStartup() {
-    const settings = store.getNetworkSettings();
-    const statusEl = document.getElementById('network-status');
-    
-    if (!settings.url || settings.strategy === 'manual') {
-        if (statusEl) statusEl.innerHTML = '<span class="inline-block w-2 h-2 rounded-full bg-gray-300 mr-1"></span> 手动模式';
-        return;
-    }
-
-    // UI Feedback
-    if (statusEl) statusEl.innerHTML = '<span class="inline-block w-2 h-2 rounded-full bg-yellow-400 mr-1 animate-pulse"></span> 正在检查更新...';
-
-    const tryFetch = async () => {
-        try {
-            const data = await store.fetchNetworkConfig(settings.url);
-            // Auto merge or overwrite? For startup, usually we merge or overwrite based on user preference.
-            // Let's assume 'network-first' means overwrite (or robust merge), 'local-first' is backup.
-            // Given the requirement "Network > Local", we update.
-            
-            store.restoreFullDump(data, 'overwrite'); // Or merge, depending on policy. Overwrite ensures consistency with remote.
-            
-            // Refresh UI
-            renderLangList();
-            renderPhrasesList();
-            refreshGeneratorDropdowns();
-            updateStats();
-            
-            // Update last updated timestamp
-            settings.lastUpdated = new Date().toISOString();
-            store.saveNetworkSettings(settings);
-            
-            if (statusEl) statusEl.innerHTML = `<span class="inline-block w-2 h-2 rounded-full bg-green-500 mr-1"></span> 已更新 (${new Date().toLocaleTimeString()})`;
-            return true;
-        } catch (e) {
-            console.warn("Startup network fetch failed:", e);
-            if (statusEl) statusEl.innerHTML = '<span class="inline-block w-2 h-2 rounded-full bg-red-400 mr-1"></span> 更新失败，使用本地配置';
-            return false;
-        }
-    };
-
-    if (settings.strategy === 'network-first') {
-        await tryFetch();
-    } else if (settings.strategy === 'local-first') {
-        // Only fetch if local seems empty? Or just background update?
-        // Usually "Local First" means use local, but maybe background update?
-        // Or it means "Use local if available, otherwise network".
-        // Let's interpret as: Use local immediately (which we did by init), and try fetch in background to update for next time or live update.
-        tryFetch(); 
-    }
-}
-
+// ==================== Tab Management ====================
 function switchMainTab(tabName) {
-    // Hide all contents
     ['generator', 'langs', 'phrases', 'data'].forEach(t => {
-        document.getElementById(`tab-content-${t}`).classList.add('hidden');
-        document.getElementById(`tab-btn-${t}`).classList.remove('tab-active', 'border-b-2');
-        document.getElementById(`tab-btn-${t}`).classList.add('tab-inactive', 'border-transparent');
+        $(`#tab-content-${t}`).classList.add('hidden');
+        const btn = $(`#tab-btn-${t}`);
+        btn.classList.remove('tab-active', 'border-b-2');
+        btn.classList.add('tab-inactive', 'border-transparent');
     });
 
-    // Show active
-    document.getElementById(`tab-content-${tabName}`).classList.remove('hidden');
-    const btn = document.getElementById(`tab-btn-${tabName}`);
+    $(`#tab-content-${tabName}`).classList.remove('hidden');
+    const btn = $(`#tab-btn-${tabName}`);
     btn.classList.add('tab-active', 'border-b-2');
     btn.classList.remove('tab-inactive', 'border-transparent');
 
-    // Refresh data if switching to generator
     if (tabName === 'generator') {
         refreshGeneratorDropdowns();
     }
-    // Refresh stats if switching to data
     if (tabName === 'data') {
         updateStats();
-        // Update network status display
-        const settings = store.getNetworkSettings();
-        document.getElementById('network-config-url').value = settings.url || '';
-        document.getElementById('network-startup-strategy').value = settings.strategy || 'manual';
     }
 }
 
-// --- Generator Tab Logic ---
+// Utility function to populate select dropdown
+function populateSelect(selectEl, options, currentValue) {
+    if (!selectEl) return;
+    selectEl.innerHTML = '';
+    (options || []).forEach(opt => {
+        const el = document.createElement('option');
+        el.value = typeof opt === 'string' ? opt : opt.id || '';
+        el.textContent = typeof opt === 'string' ? opt : opt.name || '';
+        selectEl.appendChild(el);
+    });
+    if (currentValue) selectEl.value = currentValue;
+}
 
-function initGeneratorTab() {
+// ==================== Generator Tab ====================
+async function initGeneratorTab() {
     refreshGeneratorDropdowns();
     
-    // Arch & Env options
-    const archSelect = document.getElementById('select-arch');
-    store.getArchitectures().forEach(opt => {
-        const el = document.createElement('option');
-        el.value = opt;
-        el.textContent = opt;
-        archSelect.appendChild(el);
-    });
+    const archSelect = $('#select-arch');
+    const envSelect = $('#select-env');
+    
+    populateSelect(archSelect, store?.getArchitectures?.() || []);
+    populateSelect(envSelect, store?.getEnvironments?.() || []);
 
-    const envSelect = document.getElementById('select-env');
-    store.getEnvironments().forEach(opt => {
-        const el = document.createElement('option');
-        el.value = opt;
-        el.textContent = opt;
-        envSelect.appendChild(el);
-    });
-
-    // Language Change Listener -> Update Wheels
-    document.getElementById('select-lang').addEventListener('change', (e) => {
-        renderWheels(e.target.value);
-    });
+    const langSelect = $('#select-lang');
+    if (langSelect) {
+        langSelect.addEventListener('change', (e) => {
+            renderWheels(e.target.value);
+        });
+    }
 }
 
 function refreshGeneratorDropdowns() {
-    const langSelect = document.getElementById('select-lang');
-    const currentVal = langSelect.value;
-    langSelect.innerHTML = '<option value="">请选择语言</option>';
+    const langSelect = $('#select-lang');
+    if (!langSelect) return;
     
-    store.getLanguages().forEach(lang => {
+    const currentVal = langSelect.value;
+    const languages = store?.getLanguages?.() || [];
+    
+    langSelect.innerHTML = '<option value="">请选择语言</option>';
+    languages.forEach(lang => {
         const opt = document.createElement('option');
-        opt.value = lang.id;
-        opt.textContent = lang.name;
+        opt.value = lang.id || '';
+        opt.textContent = lang.name || '未命名';
         langSelect.appendChild(opt);
     });
     
@@ -146,7 +261,9 @@ function refreshGeneratorDropdowns() {
 }
 
 function renderWheels(langId) {
-    const container = document.getElementById('wheels-container');
+    const container = $('#wheels-container');
+    if (!container) return;
+    
     container.innerHTML = '';
     
     if (!langId) {
@@ -154,8 +271,11 @@ function renderWheels(langId) {
         return;
     }
 
-    const lang = store.getLanguages().find(l => l.id === langId);
-    if (!lang || !lang.wheels) return;
+    const lang = store?.getLanguages?.()?.find(l => l.id === langId);
+    if (!lang?.wheels?.length) {
+        container.innerHTML = '<span class="text-gray-400 text-sm col-span-full">该语言无可用库/轮子</span>';
+        return;
+    }
 
     lang.wheels.forEach(wheel => {
         const wrapper = document.createElement('label');
@@ -163,12 +283,11 @@ function renderWheels(langId) {
         
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
-        checkbox.value = wheel;
+        checkbox.value = wheel || '';
         checkbox.className = 'form-checkbox h-4 w-4 text-blue-600 rounded focus:ring-blue-500';
-        // Check draft logic later
         
         const text = document.createElement('span');
-        text.textContent = wheel;
+        text.textContent = String(wheel || '未命名');
         text.className = 'text-sm text-gray-700';
 
         wrapper.appendChild(checkbox);
@@ -177,17 +296,14 @@ function renderWheels(langId) {
     });
 }
 
-// --- Module Management ---
-
-let modules = [];
-
+// ==================== Module Management ====================
 function renderModuleTabs() {
-    const nav = document.getElementById('module-tabs-header');
+    const nav = $('#module-tabs-header');
     nav.innerHTML = '';
 
-    modules.forEach((mod, index) => {
+    state.modules.forEach(mod => {
         const btn = document.createElement('button');
-        const isActive = mod.id === currentModuleId;
+        const isActive = mod.id === state.currentModuleId;
         
         btn.className = isActive 
             ? 'group inline-flex items-center px-4 py-2 border-b-2 border-blue-500 font-medium text-sm text-blue-600 bg-blue-50 rounded-t-md'
@@ -200,41 +316,54 @@ function renderModuleTabs() {
 }
 
 function switchModule(id) {
-    // Save current fields to memory before switching
-    if (currentModuleId) {
-        const curr = modules.find(m => m.id === currentModuleId);
-        if (curr) {
-            curr.name = document.getElementById('module-name').value;
-            curr.front = document.getElementById('module-front').value;
-            curr.back = document.getElementById('module-back').value;
+    try {
+        saveCurrentModule();
+        const nextMod = state.modules.find(m => m.id === id);
+        if (!nextMod) {
+            console.warn(`Module ${id} not found`);
+            return;
         }
-    }
-
-    currentModuleId = id;
-    const nextMod = modules.find(m => m.id === id);
-    if (nextMod) {
-        document.getElementById('module-name').value = nextMod.name;
-        document.getElementById('module-front').value = nextMod.front;
-        document.getElementById('module-back').value = nextMod.back;
-        renderModuleTabs();
+        
+        state.currentModuleId = id;
+        const nameEl = $('#module-name');
+        const frontEl = $('#module-front');
+        const backEl = $('#module-back');
+        
+        if (nameEl && frontEl && backEl) {
+            nameEl.value = nextMod.name || '';
+            frontEl.value = nextMod.front || '';
+            backEl.value = nextMod.back || '';
+            renderModuleTabs();
+        }
+    } catch (e) {
+        console.error('Error switching module:', e);
+        Toast.show('切换模块失败', 'error');
     }
 }
 
-function addModule() {
-    // Save current first
-    if (currentModuleId) {
-        const curr = modules.find(m => m.id === currentModuleId);
-        if (curr) {
-            curr.name = document.getElementById('module-name').value;
-            curr.front = document.getElementById('module-front').value;
-            curr.back = document.getElementById('module-back').value;
-        }
-    }
+function saveCurrentModule() {
+    if (!state.currentModuleId) return;
+    
+    const curr = state.modules.find(m => m.id === state.currentModuleId);
+    if (!curr) return;
+    
+    const nameEl = $('#module-name');
+    const frontEl = $('#module-front');
+    const backEl = $('#module-back');
+    
+    curr.name = nameEl?.value || 'Unnamed';
+    curr.front = frontEl?.value || '';
+    curr.back = backEl?.value || '';
+}
 
-    const newId = Date.now();
-    modules.push({
+
+function addModule() {
+    saveCurrentModule();
+    
+    const newId = Utils.generateId();
+    state.modules.push({
         id: newId,
-        name: `模块 ${modules.length + 1}`,
+        name: `模块 ${state.modules.length + 1}`,
         front: '',
         back: ''
     });
@@ -242,33 +371,43 @@ function addModule() {
     saveDraftState();
 }
 
-function removeCurrentModule() {
-    if (modules.length <= 1) {
-        alert("至少保留一个模块");
+async function removeCurrentModule() {
+    if (state.modules.length <= 1) {
+        Toast.show('至少保留一个模块', 'warning');
         return;
     }
-    if (!confirm("确定删除当前模块？")) return;
+    
+    const confirmed = await Modal.confirm({
+        title: '删除模块',
+        message: '确定删除当前模块？此操作不可撤销。'
+    });
+    
+    if (!confirmed) return;
 
-    modules = modules.filter(m => m.id !== currentModuleId);
-    switchModule(modules[0].id);
+    state.modules = state.modules.filter(m => m.id !== state.currentModuleId);
+    if (state.modules.length > 0) {
+        switchModule(state.modules[0].id);
+    } else {
+        // Fallback: add a default module if all deleted
+        addModule();
+    }
     saveDraftState();
 }
 
-// --- Phrase Modal Logic ---
-
+// ==================== Phrase Modal ====================
 function openPhraseModal(type) {
-    activePhraseTarget = type; // 'frontend' or 'backend' matching the list keys, but UI calls 'frontend' -> input id 'module-front'
-    const modal = document.getElementById('modal-phrases');
-    const list = document.getElementById('modal-phrases-list');
-    const title = document.getElementById('modal-phrases-title');
+    state.activePhraseTarget = type;
+    Modal.open('modal-phrases');
     
-    title.textContent = type === 'frontend' ? '选择前端/上层常用语' : '选择后端/底层常用语';
+    $('#modal-phrases-title').textContent = type === 'frontend' ? '选择前端/上层常用语' : '选择后端/底层常用语';
+    
+    const list = $('#modal-phrases-list');
     list.innerHTML = '';
 
     const phrases = store.getPhrases()[type] || [];
     phrases.forEach(p => {
         const div = document.createElement('div');
-        div.className = "flex items-start";
+        div.className = 'flex items-start';
         div.innerHTML = `
             <div class="flex items-center h-5">
                 <input type="checkbox" value="${p}" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded phrase-checkbox">
@@ -279,30 +418,26 @@ function openPhraseModal(type) {
         `;
         list.appendChild(div);
     });
-
-    modal.classList.remove('hidden');
 }
 
 function closeModal(id) {
-    document.getElementById(id).classList.add('hidden');
+    Modal.close(id);
 }
 
 function insertSelectedPhrases() {
-    const checkboxes = document.querySelectorAll('.phrase-checkbox:checked');
+    const checkboxes = $$('.phrase-checkbox:checked');
     const selected = Array.from(checkboxes).map(c => c.value);
     
     if (selected.length > 0) {
-        const targetId = activePhraseTarget === 'frontend' ? 'module-front' : 'module-back';
-        const textarea = document.getElementById(targetId);
+        const targetId = state.activePhraseTarget === 'frontend' ? 'module-front' : 'module-back';
+        const textarea = $(`#${targetId}`);
         const currentVal = textarea.value;
-        // Append with newlines
         const prefix = currentVal ? '\n' : '';
         textarea.value = currentVal + prefix + selected.map(s => `- ${s}`).join('\n');
         
-        // Update current module memory immediately
-        const curr = modules.find(m => m.id === currentModuleId);
+        const curr = state.modules.find(m => m.id === state.currentModuleId);
         if (curr) {
-            if (activePhraseTarget === 'frontend') curr.front = textarea.value;
+            if (state.activePhraseTarget === 'frontend') curr.front = textarea.value;
             else curr.back = textarea.value;
         }
         saveDraftState();
@@ -310,19 +445,18 @@ function insertSelectedPhrases() {
     closeModal('modal-phrases');
 }
 
-// --- Lang & Phrase Management (Tab 2 & 3) ---
-
+// ==================== Lang Management ====================
 function initLangTab() {
     renderLangList();
 }
 
 function renderLangList() {
-    const container = document.getElementById('lang-list-container');
+    const container = $('#lang-list-container');
     container.innerHTML = '';
     
     store.getLanguages().forEach(lang => {
         const div = document.createElement('div');
-        div.className = "flex justify-between items-center bg-gray-50 p-4 rounded border border-gray-200";
+        div.className = 'flex justify-between items-center bg-gray-50 p-4 rounded border border-gray-200';
         div.innerHTML = `
             <div>
                 <h4 class="font-bold text-gray-900">${lang.name}</h4>
@@ -337,16 +471,12 @@ function renderLangList() {
     });
 }
 
-// Alias for backward compatibility if needed, but fixing the call above is better
-function editLang(id) {
-    openLangModal(id);
-}
-
 function openLangModal(id = null) {
-    const modal = document.getElementById('modal-lang');
-    const nameInput = document.getElementById('lang-edit-name');
-    const wheelsInput = document.getElementById('lang-edit-wheels');
-    const idInput = document.getElementById('lang-edit-id');
+    Modal.open('modal-lang');
+    
+    const nameInput = $('#lang-edit-name');
+    const wheelsInput = $('#lang-edit-wheels');
+    const idInput = $('#lang-edit-id');
 
     if (id) {
         const lang = store.getLanguages().find(l => l.id === id);
@@ -358,31 +488,31 @@ function openLangModal(id = null) {
         wheelsInput.value = '';
         idInput.value = '';
     }
-    modal.classList.remove('hidden');
 }
 
 function saveLanguage() {
-    const id = document.getElementById('lang-edit-id').value;
-    const name = document.getElementById('lang-edit-name').value;
-    const wheelsStr = document.getElementById('lang-edit-wheels').value;
+    const id = $('#lang-edit-id').value;
+    const nameResult = Validator.validateLanguageName($('#lang-edit-name').value);
     
-    if (!name) return alert('语言名称不能为空');
+    if (!nameResult.valid) {
+        Toast.show(nameResult.message, 'error');
+        return;
+    }
 
-    const wheels = wheelsStr.split(/[,，]/).map(s => s.trim()).filter(s => s);
+    const wheelsResult = Validator.validateWheels($('#lang-edit-wheels').value);
+    const wheels = wheelsResult.value;
     const langs = store.getLanguages();
 
     if (id) {
-        // Edit
         const idx = langs.findIndex(l => l.id === id);
         if (idx > -1) {
-            langs[idx].name = name;
+            langs[idx].name = nameResult.value;
             langs[idx].wheels = wheels;
         }
     } else {
-        // Add
         langs.push({
-            id: 'lang_' + Date.now(),
-            name: name,
+            id: `lang_${Utils.generateId()}`,
+            name: nameResult.value,
             wheels: wheels
         });
     }
@@ -390,18 +520,26 @@ function saveLanguage() {
     store.saveLanguages(langs);
     renderLangList();
     closeModal('modal-lang');
-    refreshGeneratorDropdowns(); // Update Tab 1
+    refreshGeneratorDropdowns();
+    Toast.show('保存成功', 'success');
 }
 
-function deleteLang(id) {
-    if (!confirm('确定删除该语言配置？')) return;
+async function deleteLang(id) {
+    const confirmed = await Modal.confirm({
+        title: '删除语言',
+        message: '确定删除该语言配置？'
+    });
+    
+    if (!confirmed) return;
+    
     const langs = store.getLanguages().filter(l => l.id !== id);
     store.saveLanguages(langs);
     renderLangList();
     refreshGeneratorDropdowns();
+    Toast.show('删除成功', 'success');
 }
 
-// Phrases CRUD
+// ==================== Phrases Management ====================
 function initPhrasesTab() {
     renderPhrasesList();
 }
@@ -410,11 +548,11 @@ function renderPhrasesList() {
     const data = store.getPhrases();
     
     ['frontend', 'backend'].forEach(type => {
-        const list = document.getElementById(`phrases-list-${type}`);
+        const list = $(`#phrases-list-${type}`);
         list.innerHTML = '';
         (data[type] || []).forEach((p, idx) => {
             const li = document.createElement('li');
-            li.className = "py-3 flex justify-between items-center";
+            li.className = 'py-3 flex justify-between items-center';
             li.innerHTML = `
                 <span class="text-gray-700 text-sm">${p}</span>
                 <button onclick="deletePhrase('${type}', ${idx})" class="text-red-500 hover:text-red-700">
@@ -426,14 +564,20 @@ function renderPhrasesList() {
     });
 }
 
-function addPhrase(type) {
-    const text = prompt("请输入新的常用语句：");
-    if (text) {
+async function addPhrase(type) {
+    const text = await Modal.prompt({
+        title: '添加常用语',
+        message: '请输入新的常用语句：',
+        placeholder: '例如：支持深色模式切换'
+    });
+    
+    if (text && text.trim()) {
         const data = store.getPhrases();
         if (!data[type]) data[type] = [];
-        data[type].push(text);
+        data[type].push(text.trim());
         store.savePhrases(data);
         renderPhrasesList();
+        Toast.show('添加成功', 'success');
     }
 }
 
@@ -444,83 +588,44 @@ function deletePhrase(type, index) {
     renderPhrasesList();
 }
 
-// --- Data Management (New) ---
-
+// ==================== Data Management ====================
 function initDataTab() {
     updateStats();
-    // Load initial network settings into UI
-    const settings = store.getNetworkSettings();
-    document.getElementById('network-config-url').value = settings.url || '';
-    document.getElementById('network-startup-strategy').value = settings.strategy || 'manual';
-    
-    // Check local storage for last update time if desired
 }
 
-// Network Config & Fetch Logic
 async function fetchNetworkPreview() {
-    const url = document.getElementById('network-config-url').value;
-    if (!url) {
-        alert("请输入有效的 URL");
+    const url = $('#network-config-url').value;
+    const validation = Validator.validateUrl(url);
+    
+    if (!validation.valid) {
+        Toast.show(validation.message, 'error');
         return;
     }
 
-    const btn = document.querySelector('button[onclick="fetchNetworkPreview()"]');
+    const btn = $('button[onclick="fetchNetworkPreview()"]');
     const originalText = btn.innerHTML;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> 加载中...';
     btn.disabled = true;
 
     try {
-        const data = await store.fetchNetworkConfig(url);
+        const data = await store.fetchNetworkConfig(validation.value);
+        state.pendingImportData = data;
         
-        // Use the common import handler
-        pendingImportData = data;
+        $('#import-preview-area').classList.remove('hidden');
+        $('#import-preview-text').textContent = JSON.stringify(data, null, 2);
         
-        // Show preview
-        document.getElementById('import-preview-area').classList.remove('hidden');
-        document.getElementById('import-preview-text').textContent = JSON.stringify(data, null, 2);
-        
-        // Also save this URL as the one to use
-        saveNetworkSettings(false); // don't alert
-        
+        Toast.show('配置加载成功', 'success');
     } catch (e) {
-        alert("获取配置失败: " + e.message);
+        Toast.show('获取配置失败: ' + e.message, 'error');
     } finally {
         btn.innerHTML = originalText;
         btn.disabled = false;
     }
 }
 
-function saveNetworkSettings(showAlert = true) {
-    const url = document.getElementById('network-config-url').value;
-    const strategy = document.getElementById('network-startup-strategy').value;
-    
-    const settings = store.getNetworkSettings();
-    settings.url = url;
-    settings.strategy = strategy;
-    
-    store.saveNetworkSettings(settings);
-    
-    if (showAlert) {
-        // Visual feedback instead of annoying alert
-        const btn = document.getElementById('network-startup-strategy');
-        const originalBg = btn.style.backgroundColor;
-        btn.style.backgroundColor = '#d1fae5'; // light green
-        setTimeout(() => {
-            btn.style.backgroundColor = originalBg;
-        }, 500);
-    }
-}
-
-// Defaults Export
-function exportDefaults() {
-    const defaults = store.getDefaults();
-    // Clean up internal keys if needed
-    downloadFile('VibePrompt_DefaultConfig.json', JSON.stringify(defaults, null, 2));
-}
-
 function updateStats() {
     const stats = store.getStats();
-    const container = document.getElementById('stats-container');
+    const container = $('#stats-container');
     if (!container) return;
     
     container.innerHTML = `
@@ -545,7 +650,7 @@ function updateStats() {
 
 function exportData() {
     const data = store.getFullDump();
-    // Format: VibePromptGenerator_备份_YYYYMMDD_HHMMSS.json
+    const yaml = store.toYAML(data);
     const now = new Date();
     const dateStr = now.getFullYear() +
                     String(now.getMonth() + 1).padStart(2, '0') +
@@ -554,10 +659,14 @@ function exportData() {
                     String(now.getMinutes()).padStart(2, '0') +
                     String(now.getSeconds()).padStart(2, '0');
     
-    downloadFile(`VibePromptGenerator_备份_${dateStr}.json`, JSON.stringify(data, null, 2));
+    downloadFile(`VibePromptGenerator_备份_${dateStr}.yaml`, yaml);
 }
 
-let pendingImportData = null;
+function exportDefaults() {
+    const defaults = store.getDefaults();
+    const yaml = store.toYAML(defaults);
+    downloadFile('VibePrompt_DefaultConfig.yaml', yaml);
+}
 
 function handleFileSelect(input) {
     const file = input.files[0];
@@ -566,147 +675,155 @@ function handleFileSelect(input) {
     const reader = new FileReader();
     reader.onload = (e) => {
         try {
-            const json = JSON.parse(e.target.result);
-            // Basic validation
-            if (!json.languages && !json.phrases && !json.draft) {
-                throw new Error("Invalid data format");
+            const data = store.parseYAML(e.target.result);
+            
+            if (!data || (!data.languages && !data.phrases && !data.draft)) {
+                throw new Error('Invalid data format');
             }
             
-            pendingImportData = json;
-            
-            // Show preview
-            document.getElementById('import-preview-area').classList.remove('hidden');
-            document.getElementById('import-preview-text').textContent = JSON.stringify(json, null, 2);
+            state.pendingImportData = data;
+            $('#import-preview-area').classList.remove('hidden');
+            $('#import-preview-text').textContent = store.toYAML(data);
         } catch (err) {
-            alert("文件格式错误或数据无效，请确保是本工具导出的JSON文件。");
+            Toast.show('文件格式错误或数据无效，仅支持 YAML 格式', 'error');
             console.error(err);
         }
     };
     reader.readAsText(file);
 }
 
-function confirmImport(mode) {
-    if (!pendingImportData) return;
+async function confirmImport(mode) {
+    if (!state.pendingImportData) return;
     
-    if (store.restoreFullDump(pendingImportData, mode)) {
-        alert("导入成功！");
+    if (store.restoreFullDump(state.pendingImportData, mode)) {
+        Toast.show('导入成功！', 'success');
         cancelImport();
         
-        // Refresh all UIs
         loadDraft();
         renderLangList();
         renderPhrasesList();
         updateStats();
         refreshGeneratorDropdowns();
     } else {
-        alert("导入失败，数据可能不完整");
+        Toast.show('导入失败，数据可能不完整', 'error');
     }
 }
 
 function cancelImport() {
-    pendingImportData = null;
-    document.getElementById('import-preview-area').classList.add('hidden');
-    document.getElementById('import-file').value = '';
+    state.pendingImportData = null;
+    $('#import-preview-area').classList.add('hidden');
+    $('#import-file').value = '';
 }
 
-function resetToDefaults() {
-    if (confirm("⚠️ 确定恢复默认配置？\n\n自定义的语言配置和常用语将被清除并重置为初始状态。当前草稿也会被重置。")) {
-        store.clearAllData(); // clearAllData calls init() which restores defaults
-        location.reload(); 
-    }
+async function resetToDefaults() {
+    const confirmed = await Modal.confirm({
+        title: '恢复默认配置',
+        message: '⚠️ 确定恢复默认配置？\n\n自定义的语言配置和常用语将被清除并重置为初始状态。当前草稿也会被重置。'
+    });
+    
+    if (!confirmed) return;
+    
+    store.clearAllData();
+    location.reload(); 
 }
 
-function clearAllData() {
-    if (confirm("🔥 严重警告：确定清空所有数据？\n\n这将永久删除所有本地存储的数据，包括语言配置、常用语和草稿！此操作不可撤销。")) {
-        localStorage.clear();
-        location.reload();
-    }
+async function clearAllData() {
+    const confirmed = await Modal.confirm({
+        title: '清空所有数据',
+        message: '🔥 严重警告：确定清空所有数据？\n\n这将永久删除所有本地存储的数据，包括语言配置、常用语和草稿！此操作不可撤销。'
+    });
+    
+    if (!confirmed) return;
+    
+    localStorage.clear();
+    location.reload();
 }
 
-// --- Auto Save & Draft ---
-
+// ==================== Draft Management ====================
 function saveDraftState() {
-    // Collect current data
+    saveCurrentModule(); // Already saves to state.modules
+    
+    const langEl = $('#select-lang');
+    const archEl = $('#select-arch');
+    const envEl = $('#select-env');
+    const descEl = $('#general-desc');
+    const notesEl = $('#notes');
+    
     const draft = {
-        selectedLang: document.getElementById('select-lang').value,
-        selectedWheels: Array.from(document.querySelectorAll('#wheels-container input:checked')).map(cb => cb.value),
-        selectedArch: document.getElementById('select-arch').value,
-        selectedEnv: document.getElementById('select-env').value,
-        generalDesc: document.getElementById('general-desc').value,
-        notes: document.getElementById('notes').value,
-        modules: modules // modules array is kept updated by switchModule/add/remove
+        selectedLang: langEl?.value || '',
+        selectedWheels: Array.from($$('#wheels-container input:checked')).map(cb => cb.value),
+        selectedArch: archEl?.value || '',
+        selectedEnv: envEl?.value || '',
+        generalDesc: descEl?.value || '',
+        notes: notesEl?.value || '',
+        modules: state.modules
     };
 
-    // Update current module text in array before saving (incase user is typing)
-    if (currentModuleId) {
-        const curr = draft.modules.find(m => m.id === currentModuleId);
-        if (curr) {
-            curr.name = document.getElementById('module-name').value;
-            curr.front = document.getElementById('module-front').value;
-            curr.back = document.getElementById('module-back').value;
-        }
+    if (store) {
+        store.saveDraft(draft);
     }
-    
-    store.saveDraft(draft);
 }
 
 function loadDraft() {
     const draft = store.getDraft();
     
-    // Restore UI
-    document.getElementById('select-lang').value = draft.selectedLang || '';
-    renderWheels(draft.selectedLang); // Render checkboxes first
+    $('#select-lang').value = draft.selectedLang || '';
+    renderWheels(draft.selectedLang);
     
-    // Check checkboxes
     if (draft.selectedWheels) {
-        setTimeout(() => { // slight delay to ensure DOM is ready
+        setTimeout(() => {
             draft.selectedWheels.forEach(val => {
-                const cb = document.querySelector(`#wheels-container input[value="${val}"]`);
+                const cb = $(`#wheels-container input[value="${val}"]`);
                 if (cb) cb.checked = true;
             });
         }, 50);
     }
 
-    document.getElementById('select-arch').value = draft.selectedArch || '';
-    document.getElementById('select-env').value = draft.selectedEnv || '';
-    document.getElementById('general-desc').value = draft.generalDesc || '';
-    document.getElementById('notes').value = draft.notes || '';
+    $('#select-arch').value = draft.selectedArch || '';
+    $('#select-env').value = draft.selectedEnv || '';
+    $('#general-desc').value = draft.generalDesc || '';
+    $('#notes').value = draft.notes || '';
 
-    // Restore Modules
-    modules = draft.modules || [];
-    if (modules.length === 0) addModule();
-    else switchModule(modules[0].id);
+    state.modules = draft.modules || [];
+    if (state.modules.length === 0) addModule();
+    else switchModule(state.modules[0].id);
 }
 
-function resetAll() {
-    if (confirm("确定重置当前草稿内容？")) {
-        const clean = store.resetDraft();
-        loadDraft();
-    }
+async function resetAll() {
+    const confirmed = await Modal.confirm({
+        title: '重置草稿',
+        message: '确定重置当前草稿内容？'
+    });
+    
+    if (!confirmed) return;
+    
+    store.resetDraft();
+    loadDraft();
+    Toast.show('草稿已重置', 'success');
 }
 
-// --- Generate Logic ---
-
+// ==================== Generate Logic ====================
 function generateMarkdown() {
-    // Ensure current module data is saved
-    if (currentModuleId) {
-        const curr = modules.find(m => m.id === currentModuleId);
-        if (curr) {
-            curr.name = document.getElementById('module-name').value;
-            curr.front = document.getElementById('module-front').value;
-            curr.back = document.getElementById('module-back').value;
+    saveCurrentModule();
+
+    try {
+        const langSelect = $('#select-lang');
+        const langName = langSelect?.options?.[langSelect?.selectedIndex]?.text || "未指定";
+        const wheels = Array.from($$('#wheels-container input:checked'))
+            .map(cb => cb.value)
+            .filter(v => v)
+            .join(', ') || "无";
+        const arch = $('#select-arch')?.value || "未指定";
+        const env = $('#select-env')?.value || "未指定";
+        const desc = $('#general-desc')?.value || "无";
+        const notes = $('#notes')?.value || "无";
+
+        if (!state.modules || state.modules.length === 0) {
+            Toast.show('至少需要一个模块', 'warning');
+            return;
         }
-    }
 
-    const langSelect = document.getElementById('select-lang');
-    const langName = langSelect.options[langSelect.selectedIndex]?.text || "未指定";
-    const wheels = Array.from(document.querySelectorAll('#wheels-container input:checked')).map(cb => cb.value).join(', ') || "无";
-    const arch = document.getElementById('select-arch').value || "未指定";
-    const env = document.getElementById('select-env').value || "未指定";
-    const desc = document.getElementById('general-desc').value || "无";
-    const notes = document.getElementById('notes').value || "无";
-
-    let md = `# 软件开发需求说明书
+        let md = `# 软件开发需求说明书
 
 ## 1. 项目概况
 - **开发语言**: ${langName}
@@ -720,23 +837,32 @@ ${desc}
 ## 3. 模块详细需求
 `;
 
-    modules.forEach((mod, idx) => {
-        md += `
-### 3.${idx + 1} ${mod.name}
+        state.modules.forEach((mod, idx) => {
+            const modName = mod.name || `模块 ${idx + 1}`;
+            const frontContent = mod.front?.trim() || '暂无';
+            const backContent = mod.back?.trim() || '暂无';
+            
+            md += `
+### 3.${idx + 1} ${modName}
 **前端/上层逻辑**:
-${mod.front || '暂无'}
+${frontContent}
 
 **后端/底层逻辑**:
-${mod.back || '暂无'}
+${backContent}
 `;
-    });
+        });
 
-    md += `
+        md += `
 ## 4. 其他注意事项
 ${notes}
 `;
 
-    downloadFile('Prompt.md', md);
+        downloadFile('Prompt.md', md);
+        Toast.show('Prompt.md 已生成并下载', 'success');
+    } catch (e) {
+        console.error('Error generating markdown:', e);
+        Toast.show('生成 Prompt.md 失败: ' + (e.message || '未知错误'), 'error');
+    }
 }
 
 function downloadFile(filename, content) {
@@ -746,8 +872,22 @@ function downloadFile(filename, content) {
 
     element.style.display = 'none';
     document.body.appendChild(element);
-
     element.click();
-
     document.body.removeChild(element);
 }
+
+// ==================== Toast Animation Styles ====================
+const style = document.createElement('style');
+style.textContent = `
+@keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+@keyframes slideOut {
+    from { transform: translateX(0); opacity: 1; }
+    to { transform: translateX(100%); opacity: 0; }
+}
+.animate-slideIn { animation: slideIn 0.3s ease-out; }
+.animate-slideOut { animation: slideOut 0.3s ease-in; }
+`;
+document.head.appendChild(style);

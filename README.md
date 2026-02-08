@@ -21,7 +21,9 @@ Vibe Prompt Generator 是一个纯前端实现的工具，旨在通过结构化�
    ```
    git clone <your-repo-url>
    ```
-2. 直接用浏览器打开 `index.html` 即可使用，无需任何构建或依赖安装。
+2. 把data.yaml更换为你的配置。
+3. 直接用浏览器打开 `index.html` 即可使用，无需任何构建或依赖安装，打开后默认配置为data.yaml，在网页上修改后，配置只缓存在浏览器中，若要持久化，请下载覆盖yaml文件。
+4. 也可上传到github pages部署。
 
 ## 目录结构
 
@@ -31,7 +33,7 @@ VibePromptGenerator/
 ├── js/
 │   ├── main.js        # 主逻辑脚本
 │   └── data.js        # 默认数据与配置
-├── data.json          # 语言、库、常用语等数据
+├── data.json          # 语言、库、常用语等数据的初始数据
 ├── docs/              # 文档
 ```
 
@@ -50,4 +52,4 @@ MIT License
 
 # AI使用情况
 
-全部由Minimax 2.1 agent 专业模式编写。
+全部由Minimax 2.1 agent 专业模式编写，后续以GLM4.7进行优化。
