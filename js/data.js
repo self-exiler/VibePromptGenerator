@@ -25,23 +25,15 @@ const DEFAULT_DATA = {
 };
 
 const Utils = {
-    isEmpty: (value) => {
-        if (value === null || value === undefined) return true;
-        if (typeof value === 'string') return value.trim() === '';
-        if (Array.isArray(value)) return value.length === 0;
-        return false;
-    },
-    
+    isEmpty: (v) => v === null || v === undefined || v === '' || (Array.isArray(v) && v.length === 0),
     debounce: (func, wait) => {
         let timeout;
-        return function executedFunction(...args) {
+        return (...args) => {
             clearTimeout(timeout);
             timeout = setTimeout(() => func(...args), wait);
         };
     },
-    
     generateId: () => `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-    
     isValidUrl: (string) => {
         try {
             new URL(string);
@@ -82,14 +74,32 @@ class DataStore {
     }
 
     async loadDefaultData() {
-        try {
-            const response = await fetch('data.yaml');
-            if (!response.ok) throw new Error('Failed to load data.yaml');
-            this.defaultData = this.parseYAML(await response.text());
-        } catch (e) {
-            console.error('Failed to load data.yaml, using fallback:', e);
-            this.defaultData = DEFAULT_DATA;
+        const possiblePaths = [
+            'data.yaml',
+            './data.yaml',
+            '/data.yaml'
+        ];
+        
+        let lastError = null;
+        
+        for (const path of possiblePaths) {
+            try {
+                console.log(`Attempting to load data.yaml from: ${path}`);
+                const response = await fetch(path);
+                if (response.ok) {
+                    const text = await response.text();
+                    console.log(`Successfully loaded data.yaml from: ${path}`);
+                    this.defaultData = this.parseYAML(text);
+                    return;
+                }
+            } catch (e) {
+                console.warn(`Failed to load from ${path}:`, e.message);
+                lastError = e;
+            }
         }
+        
+        console.error('Failed to load data.yaml from all paths, using fallback:', lastError);
+        this.defaultData = DEFAULT_DATA;
     }
 
     parseYAML(yamlText) {
@@ -190,7 +200,7 @@ class DataStore {
             console.log("Fetching config from:", url);
             const response = await fetch(url, {
                 signal: controller.signal,
-                headers: { 'Accept': 'application/json, text/yaml, text/plain' },
+                headers: { 'Accept': 'text/yaml, text/plain, application/yaml' },
                 mode: 'cors'
             });
             
@@ -199,7 +209,7 @@ class DataStore {
             }
             
             const text = await response.text();
-            const data = text.startsWith('{') ? JSON.parse(text) : this.parseYAML(text);
+            const data = this.parseYAML(text);
             
             // Validate basic structure
             if (!data.languages && !data.phrases) {
