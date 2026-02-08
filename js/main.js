@@ -11,24 +11,18 @@ const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => document.querySelectorAll(selector);
 
 const Validator = {
-    isEmpty: (value) => Utils.isEmpty(value),
-    isNotEmpty: (value) => !Utils.isEmpty(value),
     validateLanguageName: (name) => {
-        const trimmed = name ? name.trim() : '';
-        if (Utils.isEmpty(trimmed)) return { valid: false, message: '语言名称不能为空' };
-        if (trimmed.length > 50) return { valid: false, message: '语言名称不能超过50个字符' };
-        return { valid: true, value: trimmed };
+        const trimmed = (name || '').trim();
+        if (!trimmed) return { valid: false, message: '语言名称不能为空' };
+        return trimmed.length <= 50 ? { valid: true, value: trimmed } : { valid: false, message: '语言名称不能超过50个字符' };
     },
     validateUrl: (url) => {
-        if (Utils.isEmpty(url)) return { valid: false, message: '请输入有效的 URL' };
-        if (!Utils.isValidUrl(url)) return { valid: false, message: 'URL 格式无效' };
-        return { valid: true, value: url.trim() };
+        const trimmed = (url || '').trim();
+        return trimmed && Utils.isValidUrl(trimmed) ? { valid: true, value: trimmed } : { valid: false, message: '请输入有效的 URL 格式' };
     },
     validateWheels: (wheelsStr) => {
-        const wheels = wheelsStr.split(/[,，]/).map(s => s.trim()).filter(s => s);
-        if (wheels.length === 0) return { valid: false, message: '请至少输入一个库/轮子' };
-        if (wheels.some(w => w.length > 50)) return { valid: false, message: '轮子名称不能超过50个字符' };
-        return { valid: true, value: wheels };
+        const wheels = (wheelsStr || '').split(/[,，]/).map(s => s.trim()).filter(s => s);
+        return wheels.length && !wheels.some(w => w.length > 50) ? { valid: true, value: wheels } : { valid: false, message: wheels.length ? '轮子名称不能超过50个字符' : '请至少输入一个库/轮子' };
     }
 };
 
@@ -74,91 +68,35 @@ const Toast = {
 
 // ==================== Modal ====================
 const Modal = {
-    open(id) {
-        $(`#${id}`).classList.remove('hidden');
-    },
-    close(id) {
-        $(`#${id}`).classList.add('hidden');
+    open(id) { $(`#${id}`)?.classList.remove('hidden'); },
+    close(id) { $(`#${id}`)?.classList.add('hidden'); },
+    _create: (html) => {
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50';
+        modal.innerHTML = html;
+        document.body.appendChild(modal);
+        return modal;
     },
     confirm(options) {
         return new Promise((resolve) => {
             const existing = $('#modal-confirm');
             if (existing) existing.remove();
-
-            const modal = document.createElement('div');
-            modal.id = 'modal-confirm';
-            modal.className = 'fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50';
-            modal.innerHTML = `
-                <div class="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
-                    <div class="px-6 py-4 border-b border-gray-200">
-                        <h3 class="text-lg font-medium text-gray-900">${options.title || '确认操作'}</h3>
-                    </div>
-                    <div class="p-6">
-                        <p class="text-gray-700">${options.message}</p>
-                    </div>
-                    <div class="px-6 py-4 bg-gray-50 rounded-b-lg flex justify-end space-x-3">
-                        <button id="modal-confirm-cancel" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
-                            取消
-                        </button>
-                        <button id="modal-confirm-ok" class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700">
-                            确定
-                        </button>
-                    </div>
-                </div>
-            `;
-
-            document.body.appendChild(modal);
-
-            $('#modal-confirm-cancel').onclick = () => {
-                modal.remove();
-                resolve(false);
-            };
-            $('#modal-confirm-ok').onclick = () => {
-                modal.remove();
-                resolve(true);
-            };
+            const html = `<div class="bg-white rounded-lg shadow-xl w-full max-w-md mx-4"><div class="px-6 py-4 border-b border-gray-200"><h3 class="text-lg font-medium text-gray-900">${options.title || '确认操作'}</h3></div><div class="p-6"><p class="text-gray-700">${options.message}</p></div><div class="px-6 py-4 bg-gray-50 rounded-b-lg flex justify-end space-x-3"><button id="modal-confirm-cancel" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">取消</button><button id="modal-confirm-ok" class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700">确定</button></div></div>`;
+            const modal = this._create(html);
+            $('#modal-confirm-cancel').onclick = () => { modal.remove(); resolve(false); };
+            $('#modal-confirm-ok').onclick = () => { modal.remove(); resolve(true); };
         });
     },
     prompt(options) {
         return new Promise((resolve) => {
             const existing = $('#modal-prompt');
             if (existing) existing.remove();
-
-            const modal = document.createElement('div');
-            modal.id = 'modal-prompt';
-            modal.className = 'fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50';
-            modal.innerHTML = `
-                <div class="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
-                    <div class="px-6 py-4 border-b border-gray-200">
-                        <h3 class="text-lg font-medium text-gray-900">${options.title || '输入'}</h3>
-                    </div>
-                    <div class="p-6 space-y-4">
-                        <p class="text-gray-700">${options.message}</p>
-                        <input type="text" id="modal-prompt-input" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border" placeholder="${options.placeholder || ''}" value="${options.defaultValue || ''}">
-                    </div>
-                    <div class="px-6 py-4 bg-gray-50 rounded-b-lg flex justify-end space-x-3">
-                        <button id="modal-prompt-cancel" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
-                            取消
-                        </button>
-                        <button id="modal-prompt-ok" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">
-                            确定
-                        </button>
-                    </div>
-                </div>
-            `;
-
-            document.body.appendChild(modal);
+            const html = `<div class="bg-white rounded-lg shadow-xl w-full max-w-md mx-4"><div class="px-6 py-4 border-b border-gray-200"><h3 class="text-lg font-medium text-gray-900">${options.title || '输入'}</h3></div><div class="p-6 space-y-4"><p class="text-gray-700">${options.message}</p><input type="text" id="modal-prompt-input" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border" placeholder="${options.placeholder || ''}" value="${options.defaultValue || ''}"></div><div class="px-6 py-4 bg-gray-50 rounded-b-lg flex justify-end space-x-3"><button id="modal-prompt-cancel" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">取消</button><button id="modal-prompt-ok" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">确定</button></div></div>`;
+            const modal = this._create(html);
             const input = $('#modal-prompt-input');
             input.focus();
-
-            $('#modal-prompt-cancel').onclick = () => {
-                modal.remove();
-                resolve(null);
-            };
-            $('#modal-prompt-ok').onclick = () => {
-                modal.remove();
-                resolve(input.value);
-            };
+            $('#modal-prompt-cancel').onclick = () => { modal.remove(); resolve(null); };
+            $('#modal-prompt-ok').onclick = () => { modal.remove(); resolve(input.value); };
             input.onkeydown = (e) => {
                 if (e.key === 'Enter') $('#modal-prompt-ok').click();
                 if (e.key === 'Escape') $('#modal-prompt-cancel').click();
@@ -170,6 +108,9 @@ const Modal = {
 // ==================== Initialization ====================
 document.addEventListener('DOMContentLoaded', async () => {
     try {
+        // Wait for store to be fully initialized
+        await store.init();
+        
         await initGeneratorTab();
         initLangTab();
         initPhrasesTab();
@@ -192,23 +133,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 // ==================== Tab Management ====================
 function switchMainTab(tabName) {
     ['generator', 'langs', 'phrases', 'data'].forEach(t => {
-        $(`#tab-content-${t}`).classList.add('hidden');
+        $(`#tab-content-${t}`).classList.toggle('hidden', t !== tabName);
         const btn = $(`#tab-btn-${t}`);
-        btn.classList.remove('tab-active', 'border-b-2');
-        btn.classList.add('tab-inactive', 'border-transparent');
+        if (t === tabName) {
+            btn.classList.add('tab-active', 'border-b-2');
+            btn.classList.remove('tab-inactive', 'border-transparent');
+        } else {
+            btn.classList.remove('tab-active', 'border-b-2');
+            btn.classList.add('tab-inactive', 'border-transparent');
+        }
     });
-
-    $(`#tab-content-${tabName}`).classList.remove('hidden');
-    const btn = $(`#tab-btn-${tabName}`);
-    btn.classList.add('tab-active', 'border-b-2');
-    btn.classList.remove('tab-inactive', 'border-transparent');
-
-    if (tabName === 'generator') {
-        refreshGeneratorDropdowns();
-    }
-    if (tabName === 'data') {
-        updateStats();
-    }
+    if (tabName === 'generator') refreshGeneratorDropdowns();
+    if (tabName === 'data') updateStats();
 }
 
 // Utility function to populate select dropdown
@@ -271,7 +207,13 @@ function renderWheels(langId) {
         return;
     }
 
-    const lang = store?.getLanguages?.()?.find(l => l.id === langId);
+    console.log('renderWheels called with langId:', langId);
+    const languages = store?.getLanguages?.();
+    console.log('Available languages:', languages);
+    
+    const lang = languages?.find(l => l.id === langId);
+    console.log('Found language:', lang);
+    
     if (!lang?.wheels?.length) {
         container.innerHTML = '<span class="text-gray-400 text-sm col-span-full">该语言无可用库/轮子</span>';
         return;
@@ -403,19 +345,10 @@ function openPhraseModal(type) {
     
     const list = $('#modal-phrases-list');
     list.innerHTML = '';
-
-    const phrases = store.getPhrases()[type] || [];
-    phrases.forEach(p => {
+    (store.getPhrases()[type] || []).forEach(p => {
         const div = document.createElement('div');
         div.className = 'flex items-start';
-        div.innerHTML = `
-            <div class="flex items-center h-5">
-                <input type="checkbox" value="${p}" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded phrase-checkbox">
-            </div>
-            <div class="ml-3 text-sm">
-                <label class="font-medium text-gray-700">${p}</label>
-            </div>
-        `;
+        div.innerHTML = `<div class="flex h-5"><input type="checkbox" value="${p}" class="h-4 w-4 text-blue-600 rounded phrase-checkbox"></div><div class="ml-3"><label class="text-sm font-medium text-gray-700">${p}</label></div>`;
         list.appendChild(div);
     });
 }
@@ -453,20 +386,10 @@ function initLangTab() {
 function renderLangList() {
     const container = $('#lang-list-container');
     container.innerHTML = '';
-    
     store.getLanguages().forEach(lang => {
         const div = document.createElement('div');
         div.className = 'flex justify-between items-center bg-gray-50 p-4 rounded border border-gray-200';
-        div.innerHTML = `
-            <div>
-                <h4 class="font-bold text-gray-900">${lang.name}</h4>
-                <p class="text-sm text-gray-500 mt-1">${lang.wheels.join(', ')}</p>
-            </div>
-            <div class="flex space-x-2">
-                <button onclick="openLangModal('${lang.id}')" class="text-blue-600 hover:text-blue-800 text-sm">编辑</button>
-                <button onclick="deleteLang('${lang.id}')" class="text-red-600 hover:text-red-800 text-sm">删除</button>
-            </div>
-        `;
+        div.innerHTML = `<div><h4 class="font-bold text-gray-900">${lang.name}</h4><p class="text-sm text-gray-500 mt-1">${lang.wheels.join(', ')}</p></div><div class="flex space-x-2"><button onclick="openLangModal('${lang.id}')" class="text-blue-600 hover:text-blue-800 text-sm">编辑</button><button onclick="deleteLang('${lang.id}')" class="text-red-600 hover:text-red-800 text-sm">删除</button></div>`;
         container.appendChild(div);
     });
 }
@@ -546,19 +469,13 @@ function initPhrasesTab() {
 
 function renderPhrasesList() {
     const data = store.getPhrases();
-    
     ['frontend', 'backend'].forEach(type => {
         const list = $(`#phrases-list-${type}`);
         list.innerHTML = '';
         (data[type] || []).forEach((p, idx) => {
             const li = document.createElement('li');
             li.className = 'py-3 flex justify-between items-center';
-            li.innerHTML = `
-                <span class="text-gray-700 text-sm">${p}</span>
-                <button onclick="deletePhrase('${type}', ${idx})" class="text-red-500 hover:text-red-700">
-                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                </button>
-            `;
+            li.innerHTML = `<span class="text-gray-700 text-sm">${p}</span><button onclick="deletePhrase('${type}', ${idx})" class="text-red-500 hover:text-red-700"><i class="fas fa-trash w-4 h-4"></i></button>`;
             list.appendChild(li);
         });
     });
@@ -649,17 +566,10 @@ function updateStats() {
 }
 
 function exportData() {
-    const data = store.getFullDump();
-    const yaml = store.toYAML(data);
     const now = new Date();
-    const dateStr = now.getFullYear() +
-                    String(now.getMonth() + 1).padStart(2, '0') +
-                    String(now.getDate()).padStart(2, '0') + '_' +
-                    String(now.getHours()).padStart(2, '0') +
-                    String(now.getMinutes()).padStart(2, '0') +
-                    String(now.getSeconds()).padStart(2, '0');
-    
-    downloadFile(`VibePromptGenerator_备份_${dateStr}.yaml`, yaml);
+    const pad = (n) => String(n).padStart(2, '0');
+    const dateStr = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    downloadFile(`VibePromptGenerator_备份_${dateStr}.yaml`, store.toYAML(store.getFullDump()));
 }
 
 function exportDefaults() {
